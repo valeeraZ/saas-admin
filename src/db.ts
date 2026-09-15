@@ -9,12 +9,10 @@ export const pool = new Pool({
   statement_timeout: 5000,
 });
 export async function migrate() {
-  await pool.query(
-    readFileSync(
-      new URL("../migrations/001_catalog.sql", import.meta.url),
-      "utf8",
-    ),
-  );
+  for (const file of ["001_catalog.sql", "002_routing.sql"])
+    await pool.query(
+      readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"),
+    );
 }
 export async function apply(input: unknown, key: string, actor: string) {
   const body = operation.parse(input);
@@ -42,6 +40,20 @@ export async function apply(input: unknown, key: string, actor: string) {
       if (old.rows[0].hash !== hash) throw Error("Idempotency conflict");
       await c.query("COMMIT");
       return;
+    }
+    if (body.kind === "route") {
+      const origin = new URL(body.targetOrigin).origin;
+      const allowed = (process.env.ADMIN_ALLOWED_APP_ORIGINS ?? "")
+        .split(",")
+        .filter(Boolean);
+      if (!allowed.includes(origin))
+        throw Error("Target origin is not operator-allowlisted");
+      const result = await c.query(
+        "INSERT INTO deployment_routes(deployment_id,target_origin) VALUES($1,$2) ON CONFLICT(deployment_id) DO UPDATE SET target_origin=excluded.target_origin WHERE deployment_routes.target_origin=excluded.target_origin RETURNING deployment_id",
+        [body.deploymentId, origin],
+      );
+      if (!result.rowCount)
+        throw Error("Route is immutable; review a new deployment");
     }
     if (body.kind === "app")
       await c.query(

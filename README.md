@@ -63,3 +63,15 @@ docker build -t saas-admin:local .
 ```
 
 The Docker runtime runs as a non-root user. Run `node src/cli.ts migrate` as a one-shot deployment job before starting API replicas. No credentials are embedded in the image.
+
+## Tenant application routing (next increment)
+
+Apply migration 002 before serving route requests. The private `GET /v1/tenants/{tenantId}/route?suffix=/reports` repeats online membership/role and Admin eligibility checks and returns an authorized deployment origin. It requires the same Portal service credential and delegated Auth bearer as the catalog. It is never exposed by a browser API.
+
+Configure `ADMIN_ALLOWED_APP_ORIGINS` on the operator CLI, then bind an origin to an already reviewed deployment:
+
+```json
+{"kind":"route","deploymentId":"00000000-0000-4000-8000-000000000002","targetOrigin":"https://reports.internal.example"}
+```
+
+Origin binding is immutable. Moving to another target requires a new reviewed deployment; switch the installation to that deployment. The Portal also requires the origin in its own allowlist. No browser input selects a target host. Deployment activation without a configured route yields 404 on application entry. The catalog remains a metadata listing; the route endpoint is the final per-request authorization boundary before forwarding.

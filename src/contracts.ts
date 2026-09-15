@@ -17,7 +17,28 @@ export const suffix = z
       ].includes(s.slice(1)),
     "Reserved suffix",
   );
+export const targetOrigin = z
+  .string()
+  .url()
+  .refine((value) => {
+    try {
+      const u = new URL(value);
+      return (
+        ["http:", "https:"].includes(u.protocol) &&
+        u.pathname === "/" &&
+        !u.username &&
+        !u.password &&
+        !u.search &&
+        !u.hash
+      );
+    } catch {
+      return false;
+    }
+  }, "Target must be an HTTP(S) origin");
 export const operation = z.discriminatedUnion("kind", [
+  z
+    .object({ kind: z.literal("route"), deploymentId: uuid, targetOrigin })
+    .strict(),
   z
     .object({
       kind: z.literal("app"),
@@ -80,5 +101,17 @@ export const catalog = z
     tenantId: uuid,
     items: z.array(item).max(50),
     nextCursor: uuid.nullable(),
+  })
+  .strict();
+
+export const resolvedRoute = z
+  .object({
+    tenantId: uuid,
+    userId: uuid,
+    appId: uuid,
+    deploymentId: uuid,
+    suffix,
+    targetOrigin,
+    roles: z.array(z.string().min(1)).min(1),
   })
   .strict();
