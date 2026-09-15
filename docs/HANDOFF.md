@@ -19,3 +19,7 @@ SDK 已合并；用户已确认托管、开放注册、审核后外部应用同�
 ## 租户模型约定
 
 用户明确只保留 Tenant（租户）概念。租户直接拥有成员、邀请和租户角色，不增加公司、部门或其他中间层级。一个用户可加入多个租户；Membership 关联 user_id 与 tenant_id。当前 API/字段/事件均使用 tenant 命名。
+
+## 2026-09-15 — real catalog increment
+
+Implemented a standalone Node/PostgreSQL Admin catalog, operator writes with durable idempotency/audit, immutable reviewed deployment metadata, tenant installation/entitlement filtering and online Auth role checks. Portal integration uses a private service-authenticated endpoint; details in README.md, contracts/openapi.json and integration/README.md. Earlier “no implementation” statements are superseded for this scope only. Full ADMIN-02 workflow/worker, management UI, automated deployment checks and ADMIN-03 billing remain open.

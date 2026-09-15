@@ -1,13 +1,65 @@
-# saas-admin
+# SaaS Admin
 
-Admin Web、Control API 与 worker：Registry、应用部署元数据、租户开通、订阅权益、持久接入流程和审计查询。成员管理界面调用 Auth，不直接写其数据库。
+Admin owns application definitions, reviewed deployments and tenant installation/entitlement facts. This first service exposes a real PostgreSQL-backed catalog consumed by Portal. Auth owns users, tenant membership and application roles; every catalog request checks them online.
 
-状态：执行准备完成，产品代码尚未迁入。
+## Run
 
-- [执行清单](docs/EXECUTION.md)
-- [新 session 交接](docs/HANDOFF.md)
-- [四仓库总体计划](docs/saas-platform-plan.md)（初始化快照；后续跨仓库决策以 saas-admin 为协调入口）
+Node >=24.10 and PostgreSQL 17 are required.
 
-源代码基线：[8cdc9ae](https://github.com/valeeraZ/portal-multiapps/tree/8cdc9ae56381dcbde8b8d3c965a75a918897896c)。
+```sh
+npm ci
+# Inject environment variables described in .env.example.
+npm run db:migrate
+npm start
+```
 
-- [当前平台约束与本仓库下一步](docs/PLATFORM-DECISIONS.md)
+`GET /health/ready` verifies database/schema availability. `GET /v1/tenants/{tenantId}/catalog` requires both `X-Portal-Key` (Portal service credential) and `Authorization: Bearer ...` (opaque Auth token to delegate to Auth). This is a private BFF service endpoint: the browser never receives the service credential. HTTPS is required for Auth except the explicit loopback development exception; deploy Admin behind TLS/private ingress. Limit network access to Portal. Rotate the shared service credential with coordinated Portal/Admin configuration.
+
+A user token is **not** interpreted as an Admin-audience identity token. Admin forwards it only to the configured Auth service, which validates issuer, audience, session and membership. Admin never decodes it or persists it. The separate service credential authenticates the calling BFF. A future general-purpose public Admin API must define its own audience/token exchange policy.
+
+## Manage the catalog
+
+This increment uses an operator CLI with database credentials, not a browser management API. Keep operator access separate from the web service, record a real operator ID and retain audit records. The web process only needs SELECT on application, deployment and installation tables. Run migrations and operator commands with separate database privileges in deployment.
+
+```sh
+ADMIN_ENABLE_OPERATOR=true ADMIN_OPERATOR_ID=operator:alice \
+  node src/cli.ts apply /path/to/operation.json unique-operation-key-0001
+```
+
+Operation JSON is validated by [operator.schema.json](contracts/operator.schema.json):
+
+```json
+{"kind":"app","id":"00000000-0000-4000-8000-000000000001","name":"Reports","description":"Team reports","suffix":"/reports","active":true}
+```
+
+```json
+{"kind":"deployment","id":"00000000-0000-4000-8000-000000000002","appId":"00000000-0000-4000-8000-000000000001","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","reviewer":"reviewer:alice","ready":true}
+```
+
+```json
+{"kind":"installation","tenantId":"00000000-0000-4000-8000-000000000003","appId":"00000000-0000-4000-8000-000000000001","deploymentId":"00000000-0000-4000-8000-000000000002","enabled":true,"entitled":true,"validUntil":"2027-01-01T00:00:00Z"}
+```
+
+Use actual tenant IDs and reviewed artifact digests. These example IDs/digests do not deploy anything. `ready=true` is an explicit operator attestation after external verification, not an automated health check. Deployment digest, owning application and reviewer are immutable; create a new deployment ID for a new artifact. Readiness may be withdrawn. Every successful operation and its actor is committed atomically to `catalog_operations`; identical retries are no-ops and reusing a key for a different operation fails. A failed write rolls back its audit/idempotency record.
+
+Repeat an installation operation with a new key and `enabled=false` or `entitled=false` to revoke availability. Entitlement expiry is evaluated using database time on each read. Entitlement here is an operator-maintained access grant, not a billing/subscription implementation.
+
+## Access and pagination
+
+An application appears only if Auth verifies active membership **and** grants at least one application role **and** Admin has an active definition, ready reviewed deployment, enabled installation and current entitlement. Owner/admin tenant roles alone do not grant application access. Tenant IDs scope installation queries and online Auth checks. Auth errors fail the whole request; no partial or cached allow response is returned.
+
+Pages scan at most 50 eligible Admin candidates in UUID order; role filtering may produce an empty page with a non-null `nextCursor`. Continue until the cursor is null. Responses contain safe metadata and roles, never internal deployment targets or credentials. Every response is `no-store`. Directory visibility is not a substitute for authorization at application entry/backend; this increment does not implement application proxying or launch URLs.
+
+[OpenAPI](contracts/openapi.json) is generated with `npm run contracts`. [Local integration](integration/README.md) reproduces real Auth/Keycloak/Portal tests. [Validation](docs/CATALOG-VALIDATION.md) records scope and limitations.
+
+## Checks and image
+
+```sh
+npm test
+npm run typecheck
+npm run format:check
+npm run contracts
+docker build -t saas-admin:local .
+```
+
+The Docker runtime runs as a non-root user. Run `node src/cli.ts migrate` as a one-shot deployment job before starting API replicas. No credentials are embedded in the image.

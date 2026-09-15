@@ -1,0 +1,77 @@
+import { createServer } from "node:http";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { settings } from "./config.ts";
+import { pool } from "./db.ts";
+import { tenantId } from "./contracts.ts";
+import { list, ApiError } from "./service.ts";
+const config = settings();
+const hash = (s: string) => createHash("sha256").update(s).digest();
+const server = createServer(async (req, res) => {
+  const send = (status: number, body: unknown) => {
+    res.writeHead(status, {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+    });
+    res.end(JSON.stringify(body));
+  };
+  try {
+    const url = new URL(req.url ?? "/", "http://internal");
+    if (req.method === "GET" && url.pathname === "/health/ready") {
+      await pool.query("SELECT 1 FROM installations LIMIT 1");
+      return send(200, { status: "ready" });
+    }
+    if (
+      !timingSafeEqual(
+        hash(
+          typeof req.headers["x-portal-key"] === "string"
+            ? req.headers["x-portal-key"]
+            : "",
+        ),
+        hash(config.key),
+      )
+    )
+      throw new ApiError(401);
+    const match = url.pathname.match(/^\/v1\/tenants\/([^/]+)\/catalog$/);
+    if (!match || req.method !== "GET") throw new ApiError(404);
+    const tenant = tenantId.safeParse(match[1]);
+    const cursor = tenantId.safeParse(
+      url.searchParams.get("cursor") ?? "00000000-0000-0000-0000-000000000000",
+    );
+    if (
+      !tenant.success ||
+      !cursor.success ||
+      [...url.searchParams.keys()].some((k) => k !== "cursor")
+    )
+      throw new ApiError(400);
+    const bearer = req.headers.authorization;
+    if (!bearer?.startsWith("Bearer ") || bearer.length > 16384)
+      throw new ApiError(401);
+    return send(200, await list(tenant.data, bearer, cursor.data));
+  } catch (e) {
+    const status = e instanceof ApiError ? e.status : 503;
+    send(status, {
+      code:
+        status === 503
+          ? "dependency_unavailable"
+          : status === 401
+            ? "unauthenticated"
+            : status === 400
+              ? "invalid_input"
+              : "access_denied",
+    });
+  }
+});
+server.requestTimeout = 15000;
+server.headersTimeout = 10000;
+server.listen(
+  Number(process.env.PORT ?? 59100),
+  process.env.HOST ?? "127.0.0.1",
+  () => console.log("Admin catalog ready"),
+);
+for (const signal of ["SIGTERM", "SIGINT"])
+  process.on(signal, () =>
+    server.close(() => {
+      void pool.end();
+    }),
+  );
