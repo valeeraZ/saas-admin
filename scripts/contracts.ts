@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { z } from "zod";
-import { catalog, operation } from "../src/contracts.ts";
+import { catalog, operation, resolvedRoute, suffix } from "../src/contracts.ts";
 const error = {
   type: "object",
   required: ["code"],
@@ -47,6 +47,45 @@ const spec = {
                   code === 503
                     ? "Dependency unavailable; no partial catalog"
                     : "Rejected",
+                content: { "application/json": { schema: error } },
+              },
+            ]),
+          ),
+        },
+      },
+    },
+    "/v1/tenants/{tenantId}/route": {
+      get: {
+        operationId: "resolveTenantApplication",
+        description:
+          "Private Portal-only route resolution; checks live Auth and Admin eligibility. Internal target must never be returned to browsers.",
+        security: [{ portalKey: [], authDelegation: [] }],
+        parameters: [
+          {
+            name: "tenantId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "suffix",
+            in: "query",
+            required: true,
+            schema: z.toJSONSchema(suffix),
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Authorized route and user context",
+            content: {
+              "application/json": { schema: z.toJSONSchema(resolvedRoute) },
+            },
+          },
+          ...Object.fromEntries(
+            [400, 401, 403, 404, 503].map((code) => [
+              String(code),
+              {
+                description: "Rejected; no route returned",
                 content: { "application/json": { schema: error } },
               },
             ]),

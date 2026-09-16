@@ -1,6 +1,6 @@
 import { pool } from "./db.ts";
 import { settings } from "./config.ts";
-import { context, permissions, catalog } from "./contracts.ts";
+import { context, permissions, catalog, resolvedRoute } from "./contracts.ts";
 export class ApiError extends Error {
   status: number;
   constructor(status: number) {
@@ -93,5 +93,38 @@ export async function list(tenant: string, bearer: string, after: string) {
     tenantId: tenant,
     items: items.filter((i) => eligible.has(i!.id)),
     nextCursor: rows.length > 50 ? candidates.at(-1)!.id : null,
+  });
+}
+
+export async function resolve(tenant: string, bearer: string, mount: string) {
+  const ctx = context.parse(
+    await auth("/v1/tenant-context", bearer, { tenantId: tenant }),
+  );
+  if (ctx.tenant.id !== tenant || ctx.membership.tenantId !== tenant)
+    throw new ApiError(503);
+  const query = `SELECT a.id AS "appId",a.suffix,d.id AS "deploymentId",r.target_origin AS "targetOrigin" FROM installations i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id JOIN deployment_routes r ON r.deployment_id=d.id WHERE i.tenant_id=$1 AND a.suffix=$2 AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now()`;
+  const before = (await pool.query(query, [tenant, mount])).rows[0];
+  if (!before) throw new ApiError(404);
+  const grant = permissions.parse(
+    await auth(
+      `/v1/tenants/${tenant}/apps/${before.appId}/permissions`,
+      bearer,
+    ),
+  );
+  if (
+    grant.tenantId !== tenant ||
+    grant.userId !== ctx.membership.userId ||
+    grant.appId !== before.appId
+  )
+    throw new ApiError(503);
+  if (!grant.allowed || !grant.roles.length) throw new ApiError(403);
+  const current = (await pool.query(query, [tenant, mount])).rows[0];
+  if (!current || current.deploymentId !== before.deploymentId)
+    throw new ApiError(403);
+  return resolvedRoute.parse({
+    ...current,
+    tenantId: tenant,
+    userId: grant.userId,
+    roles: grant.roles,
   });
 }

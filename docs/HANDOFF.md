@@ -23,3 +23,7 @@ SDK 已合并；用户已确认托管、开放注册、审核后外部应用同�
 ## 2026-09-15 — real catalog increment
 
 Implemented a standalone Node/PostgreSQL Admin catalog, operator writes with durable idempotency/audit, immutable reviewed deployment metadata, tenant installation/entitlement filtering and online Auth role checks. Portal integration uses a private service-authenticated endpoint; details in README.md, contracts/openapi.json and integration/README.md. Earlier “no implementation” statements are superseded for this scope only. Full ADMIN-02 workflow/worker, management UI, automated deployment checks and ADMIN-03 billing remain open.
+
+## 2026-09-16 — private deployment routes
+
+Migration 002 adds immutable operator-approved origin bindings to reviewed deployments. The private route endpoint combines live Auth checks and current Admin eligibility, returning the chosen deployment/user context only to authenticated Portal service calls. Public catalog responses still omit internal targets. See contracts/openapi.json and README routing section. Run migrations before restarting API replicas.
