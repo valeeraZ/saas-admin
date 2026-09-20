@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { settings } from "./config.ts";
 import { pool } from "./db.ts";
 import { tenantId } from "./contracts.ts";
-import { list, resolve, ApiError } from "./service.ts";
+import { list, resolve, resolveAsset, ApiError } from "./service.ts";
 const config = settings();
 const hash = (s: string) => createHash("sha256").update(s).digest();
 const server = createServer(async (req, res) => {
@@ -20,6 +20,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/health/ready") {
       await pool.query("SELECT 1 FROM installations LIMIT 1");
       await pool.query("SELECT 1 FROM deployment_routes LIMIT 1");
+      await pool.query("SELECT 1 FROM runtime_deployments LIMIT 1");
       return send(200, { status: "ready" });
     }
     if (
@@ -33,24 +34,43 @@ const server = createServer(async (req, res) => {
       )
     )
       throw new ApiError(401);
+    if (req.method === "GET" && url.pathname === "/v1/runtime/assets") {
+      const mount = url.searchParams.get("suffix") ?? "";
+      const version = url.searchParams.get("version") ?? "";
+      if (
+        !/^\/[a-z][a-z0-9-]{0,62}$/.test(mount) ||
+        !/^[a-zA-Z0-9-]{1,80}$/.test(version) ||
+        [...url.searchParams.keys()].some(
+          (k) => !["suffix", "version"].includes(k),
+        ) ||
+        url.searchParams.getAll("suffix").length !== 1 ||
+        url.searchParams.getAll("version").length !== 1
+      )
+        throw new ApiError(400);
+      return send(200, await resolveAsset(mount, version));
+    }
     const match = url.pathname.match(
-      /^\/v1\/tenants\/([^/]+)\/(catalog|route)$/,
+      /^\/v1\/tenants\/([^/]+)\/(catalog|route|runtime-route)$/,
     );
     if (!match || req.method !== "GET") throw new ApiError(404);
     const tenant = tenantId.safeParse(match[1]);
-    if (match[2] === "route") {
+    if (match[2] === "route" || match[2] === "runtime-route") {
       const mount = url.searchParams.get("suffix");
       const bearer = req.headers.authorization;
       if (
         !tenant.success ||
         !mount ||
+        url.searchParams.getAll("suffix").length !== 1 ||
         !/^\/[a-z][a-z0-9-]{0,62}$/.test(mount) ||
         [...url.searchParams.keys()].some((k) => k !== "suffix")
       )
         throw new ApiError(400);
       if (!bearer?.startsWith("Bearer ") || bearer.length > 16384)
         throw new ApiError(401);
-      return send(200, await resolve(tenant.data, bearer, mount));
+      return send(
+        200,
+        await resolve(tenant.data, bearer, mount, match[2] === "runtime-route"),
+      );
     }
 
     const cursor = tenantId.safeParse(

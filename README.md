@@ -75,3 +75,7 @@ Configure `ADMIN_ALLOWED_APP_ORIGINS` on the operator CLI, then bind an origin t
 ```
 
 Origin binding is immutable. Moving to another target requires a new reviewed deployment; switch the installation to that deployment. The Portal also requires the origin in its own allowlist. No browser input selects a target host. Deployment activation without a configured route yields 404 on application entry. The catalog remains a metadata listing; the route endpoint is the final per-request authorization boundary before forwarding.
+
+## Runtime Application Registry
+
+For new production onboarding use the [runtime Registry workflow](docs/RUNTIME-REGISTRY.md), migration 003 and the `runtime-deployment`, `deployment-status`, `replace-deployment` operations. The older examples above remain legacy catalog/environment-mode operations. Runtime Registry publishes reviewed origins, runtime type and immutable build namespaces without a Portal restart; old versions have explicit compatibility deadlines and terminal revocation. Operator approval remains manual.

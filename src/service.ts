@@ -1,6 +1,13 @@
 import { pool } from "./db.ts";
 import { settings } from "./config.ts";
-import { context, permissions, catalog, resolvedRoute } from "./contracts.ts";
+import {
+  context,
+  permissions,
+  catalog,
+  resolvedRoute,
+  runtimeRoute,
+  runtimeMetadata,
+} from "./contracts.ts";
 export class ApiError extends Error {
   status: number;
   constructor(status: number) {
@@ -96,13 +103,24 @@ export async function list(tenant: string, bearer: string, after: string) {
   });
 }
 
-export async function resolve(tenant: string, bearer: string, mount: string) {
+export async function resolve(
+  tenant: string,
+  bearer: string,
+  mount: string,
+  runtimeOnly = false,
+) {
   const ctx = context.parse(
     await auth("/v1/tenant-context", bearer, { tenantId: tenant }),
   );
   if (ctx.tenant.id !== tenant || ctx.membership.tenantId !== tenant)
     throw new ApiError(503);
-  const query = `SELECT a.id AS "appId",a.suffix,d.id AS "deploymentId",r.target_origin AS "targetOrigin" FROM installations i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id JOIN deployment_routes r ON r.deployment_id=d.id WHERE i.tenant_id=$1 AND a.suffix=$2 AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now()`;
+  const metadata = runtimeOnly
+    ? `,rd.runtime,rd.asset_version AS "assetVersion",rd.status,rd.assets_until AS "assetsUntil",d.digest,d.reviewer,d.reviewed_at AS "reviewedAt"`
+    : "";
+  const runtimeJoin = runtimeOnly
+    ? "JOIN runtime_deployments rd ON rd.deployment_id=d.id AND rd.status='ready' AND rd.mount=a.suffix"
+    : "";
+  const query = `SELECT a.id AS "appId",a.suffix,d.id AS "deploymentId",r.target_origin AS "targetOrigin"${metadata} FROM installations i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id JOIN deployment_routes r ON r.deployment_id=d.id ${runtimeJoin} WHERE i.tenant_id=$1 AND a.suffix=$2 AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now()`;
   const before = (await pool.query(query, [tenant, mount])).rows[0];
   if (!before) throw new ApiError(404);
   const grant = permissions.parse(
@@ -121,10 +139,34 @@ export async function resolve(tenant: string, bearer: string, mount: string) {
   const current = (await pool.query(query, [tenant, mount])).rows[0];
   if (!current || current.deploymentId !== before.deploymentId)
     throw new ApiError(403);
-  return resolvedRoute.parse({
+  if (runtimeOnly) current.reviewedAt = current.reviewedAt.toISOString();
+  return (runtimeOnly ? runtimeRoute : resolvedRoute).parse({
     ...current,
     tenantId: tenant,
     userId: grant.userId,
     roles: grant.roles,
+  });
+}
+
+// Public build files are tenant-independent; this service API is still Portal-only.
+export async function resolveAsset(mount: string, version: string) {
+  const row = (
+    await pool.query(
+      `SELECT a.id AS "appId",d.id AS "deploymentId",a.suffix,
+    r.target_origin AS "targetOrigin",rd.runtime,rd.asset_version AS "assetVersion",
+    rd.status,rd.assets_until AS "assetsUntil",d.digest,d.reviewer,d.reviewed_at AS "reviewedAt"
+    FROM runtime_deployments rd JOIN deployments d ON d.id=rd.deployment_id
+    JOIN app_definitions a ON a.id=rd.app_id AND a.suffix=rd.mount
+    JOIN deployment_routes r ON r.deployment_id=d.id
+    WHERE a.active AND rd.mount=$1 AND rd.asset_version=$2 AND rd.runtime='nextjs'
+    AND ((rd.status='ready' AND d.ready) OR (rd.status='retired' AND rd.assets_until>now()))`,
+      [mount, version],
+    )
+  ).rows[0];
+  if (!row) throw new ApiError(404);
+  return runtimeMetadata.parse({
+    ...row,
+    reviewedAt: row.reviewedAt.toISOString(),
+    assetsUntil: row.assetsUntil?.toISOString() ?? null,
   });
 }
