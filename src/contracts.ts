@@ -14,6 +14,7 @@ export const suffix = z
         "tenants",
         "invitations",
         "health",
+        "app-assets",
       ].includes(s.slice(1)),
     "Reserved suffix",
   );
@@ -35,7 +36,38 @@ export const targetOrigin = z
       return false;
     }
   }, "Target must be an HTTP(S) origin");
+export const runtime = z.enum(["http", "nextjs"]);
+export const assetVersion = z
+  .string()
+  .regex(/^[a-zA-Z0-9-]{1,80}$/)
+  .nullable();
 export const operation = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("runtime-deployment"),
+      id: uuid,
+      appId: uuid,
+      digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+      targetOrigin,
+      runtime,
+      assetVersion,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("deployment-status"),
+      deploymentId: uuid,
+      status: z.enum(["ready", "revoked"]),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("replace-deployment"),
+      deploymentId: uuid,
+      replacementId: uuid,
+      assetsUntil: z.iso.datetime(),
+    })
+    .strict(),
   z
     .object({ kind: z.literal("route"), deploymentId: uuid, targetOrigin })
     .strict(),
@@ -114,4 +146,23 @@ export const resolvedRoute = z
     targetOrigin,
     roles: z.array(z.string().min(1)).min(1),
   })
+  .strict();
+
+export const runtimeMetadata = z
+  .object({
+    appId: uuid,
+    deploymentId: uuid,
+    suffix,
+    targetOrigin,
+    runtime,
+    assetVersion,
+    status: z.enum(["ready", "retired"]),
+    assetsUntil: z.iso.datetime().nullable(),
+    digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    reviewer: z.string().min(1).max(200),
+    reviewedAt: z.iso.datetime(),
+  })
+  .strict();
+export const runtimeRoute = resolvedRoute
+  .extend(runtimeMetadata.shape)
   .strict();

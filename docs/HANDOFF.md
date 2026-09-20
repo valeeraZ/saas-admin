@@ -27,3 +27,7 @@ Implemented a standalone Node/PostgreSQL Admin catalog, operator writes with dur
 ## 2026-09-16 — private deployment routes
 
 Migration 002 adds immutable operator-approved origin bindings to reviewed deployments. The private route endpoint combines live Auth checks and current Admin eligibility, returning the chosen deployment/user context only to authenticated Portal service calls. Public catalog responses still omit internal targets. See contracts/openapi.json and README routing section. Run migrations before restarting API replicas.
+
+## 2026-09-20 — Runtime Application Registry
+
+The `codex/runtime-application-registry` branch adds migration 003, immutable runtime metadata, pending/ready/retired/revoked transitions, atomic installation replacement, public build-version lookup, audit and generated contracts. Production Portal uses online Admin resolution; no Registry/authorization cache is introduced. See [operator and rollout guide](RUNTIME-REGISTRY.md). The operator CLI remains the control boundary; management UI, automated health-check worker and billing remain separate work. This implementation is based on merged main `5219dc8`, not the previous stacked branch.

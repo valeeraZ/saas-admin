@@ -1,6 +1,13 @@
 import { writeFileSync } from "node:fs";
 import { z } from "zod";
-import { catalog, operation, resolvedRoute, suffix } from "../src/contracts.ts";
+import {
+  catalog,
+  operation,
+  resolvedRoute,
+  runtimeRoute,
+  runtimeMetadata,
+  suffix,
+} from "../src/contracts.ts";
 const error = {
   type: "object",
   required: ["code"],
@@ -10,6 +17,40 @@ const spec = {
   openapi: "3.1.0",
   info: { title: "SaaS Admin Catalog", version: "0.1.0" },
   paths: {
+    "/v1/runtime/assets": {
+      get: {
+        operationId: "resolveRuntimeAsset",
+        security: [{ portalKey: [] }],
+        description:
+          "Private Portal-only immutable public asset lookup. No cache; expired or revoked versions are denied.",
+        parameters: [
+          {
+            name: "suffix",
+            in: "query",
+            required: true,
+            schema: z.toJSONSchema(suffix),
+          },
+          {
+            name: "version",
+            in: "query",
+            required: true,
+            schema: { type: "string", pattern: "^[a-zA-Z0-9-]{1,80}$" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Reviewed public build deployment",
+            content: {
+              "application/json": { schema: z.toJSONSchema(runtimeMetadata) },
+            },
+          },
+          "400": { description: "Invalid input" },
+          "401": { description: "Service credential required" },
+          "404": { description: "Inactive or unknown version" },
+          "503": { description: "Unavailable" },
+        },
+      },
+    },
     "/v1/tenants/{tenantId}/catalog": {
       get: {
         operationId: "listTenantCatalog",
@@ -115,6 +156,25 @@ const spec = {
     },
   },
 };
+Object.assign(spec.paths, {
+  "/v1/tenants/{tenantId}/runtime-route": {
+    get: {
+      ...spec.paths["/v1/tenants/{tenantId}/route"].get,
+      operationId: "resolveRuntimeApplication",
+      description:
+        "Online Auth and Admin checks with immutable reviewed runtime metadata. No authorization or route cache.",
+      responses: {
+        ...spec.paths["/v1/tenants/{tenantId}/route"].get.responses,
+        "200": {
+          description: "Ready runtime route",
+          content: {
+            "application/json": { schema: z.toJSONSchema(runtimeRoute) },
+          },
+        },
+      },
+    },
+  },
+});
 writeFileSync("contracts/openapi.json", JSON.stringify(spec, null, 2) + "\n");
 writeFileSync(
   "contracts/operator.schema.json",
