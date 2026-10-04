@@ -11,8 +11,15 @@ jobs:
         with:
           node-version: 24.10.0
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
       - run: npm run contracts && git diff --exit-code -- contracts
+      - run: npm ci --prefix web
+      - run: npm test --prefix web
+      - run: npm run typecheck --prefix web
+      - run: npm run build --prefix web
       - run: docker build -t saas-admin:check .

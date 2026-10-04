@@ -14,6 +14,7 @@ export async function migrate() {
     "001_catalog.sql",
     "002_routing.sql",
     "003_runtime_registry.sql",
+    "004_console_sessions.sql",
   ])
     await pool.query(
       readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"),
