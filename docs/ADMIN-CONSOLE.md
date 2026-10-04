@@ -58,3 +58,7 @@ npm run build --prefix web
 ```
 
 The browser harness uses real local Keycloak and PostgreSQL in a unique Docker Compose project, builds/runs the production console, exercises persistent mutations and identity failure cases, and removes only its own containers/volume on exit. It requires Auth's development virtualenv (TLS helpers), installed Chromium and a local Docker context. Screenshots and private logs remain in the printed temporary directory; they may contain test-only secrets and should not be published wholesale. No application workload is deployed by these tests.
+
+Large-catalog browser pagination and legacy management UI are outside the current runtime workflow browser acceptance coverage. Remote console deployment and a separate console container remain optional infrastructure work.
+
+Production dependency audit is clean (`npm audit --omit=dev`); seven high-severity upstream advisories remain in the shadcn CLI development-tool dependencies. The generated stylesheet uses the package at build time. Review upstream fixes separately; a forced audit downgrade would replace the chosen CLI version.
