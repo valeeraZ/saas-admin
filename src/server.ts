@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { settings } from "./config.ts";
 import { pool } from "./db.ts";
 import { entityId } from "./contracts.ts";
-import { list, resolve, resolveAsset, ApiError } from "./service.ts";
+import { list, discover, resolve, resolveAsset, ApiError } from "./service.ts";
 const config = settings();
 const hash = (s: string) => createHash("sha256").update(s).digest();
 const server = createServer(async (req, res) => {
@@ -49,7 +49,9 @@ const server = createServer(async (req, res) => {
         throw new ApiError(400);
       return send(200, await resolveAsset(mount, version));
     }
-    const match = url.pathname.match(/^\/v1\/(catalog|route|runtime-route)$/);
+    const match = url.pathname.match(
+      /^\/v1\/(catalog|discovery|route|runtime-route)$/,
+    );
     if (!match || req.method !== "GET") throw new ApiError(404);
     if (match[1] === "route" || match[1] === "runtime-route") {
       const mount = url.searchParams.get("suffix");
@@ -80,7 +82,10 @@ const server = createServer(async (req, res) => {
     const bearer = req.headers.authorization;
     if (!bearer?.startsWith("Bearer ") || bearer.length > 16384)
       throw new ApiError(401);
-    return send(200, await list(bearer, cursor.data));
+    return send(
+      200,
+      await (match[1] === "discovery" ? discover : list)(bearer, cursor.data),
+    );
   } catch (e) {
     const status = e instanceof ApiError ? e.status : 503;
     send(status, {

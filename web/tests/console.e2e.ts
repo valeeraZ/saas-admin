@@ -103,8 +103,18 @@ try {
       .click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Name", { exact: true }).fill(name);
-    await dialog.getByLabel("Description", { exact: true }).fill(description);
+    await dialog.locator("#field-description").fill(description);
     await dialog.getByLabel("Mount", { exact: true }).fill(mount);
+    for (const key of ["viewer", "editor"]) {
+      await dialog
+        .getByRole("button", { name: "Add role", exact: true })
+        .click();
+      const i = key === "viewer" ? 0 : 1;
+      await dialog.locator("#role-key-" + i).fill(key);
+      await dialog
+        .locator("#role-name-" + i)
+        .fill(key === "viewer" ? "Viewer" : "Editor");
+    }
     await dialog
       .getByRole("button", { name: "Create application", exact: true })
       .click();
@@ -155,7 +165,7 @@ try {
     "",
   );
   await page
-    .getByLabel("Description", { exact: true })
+    .locator("#field-description")
     .fill("Updated using the operator console.");
   await page
     .getByRole("dialog")
@@ -217,9 +227,8 @@ try {
   await page
     .getByRole("option", { name: "Example Member · member@example.test" })
     .click();
-  await access
-    .getByLabel("Roles (comma-separated)", { exact: true })
-    .fill("viewer, editor");
+  await access.getByLabel("Viewer", { exact: true }).check();
+  await access.getByLabel("Editor", { exact: true }).check();
   await access
     .getByRole("button", { name: "Save changes", exact: true })
     .click();

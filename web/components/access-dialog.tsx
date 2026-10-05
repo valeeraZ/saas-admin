@@ -9,7 +9,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { AppRole } from "@/lib/access-contracts";
 import {
   Select,
   SelectTrigger,
@@ -18,7 +19,13 @@ import {
   SelectGroup,
   SelectItem,
 } from "@/components/ui/select";
-import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
+import {
+  FieldGroup,
+  Field,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+} from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
@@ -50,7 +57,8 @@ export function AccessDialog({
   const [users, setUsers] = useState<User[]>([]),
     [grants, setGrants] = useState<Grant[]>([]),
     [userId, setUserId] = useState(""),
-    [roles, setRoles] = useState("viewer"),
+    [roles, setRoles] = useState<string[]>([]),
+    [definitions, setDefinitions] = useState<AppRole[]>([]),
     [enabled, setEnabled] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -82,8 +90,20 @@ export function AccessDialog({
     }
     setBusy(true);
     setError("");
-    Promise.all([load("users"), load("grants")])
-      .then(([u, g]) => {
+    Promise.all([
+      load("users"),
+      load("grants"),
+      fetch("/api/roles?appId=" + appId, {
+        signal: controller.signal,
+        cache: "no-store",
+      }).then(async (r) => {
+        if (!r.ok) throw Error();
+        return r.json();
+      }),
+    ])
+      .then(([u, g, definitions]) => {
+        if (controller.signal.aborted) return;
+        setDefinitions(definitions.roles.filter((r: AppRole) => r.active));
         setUsers(u as User[]);
         setGrants(g as Grant[]);
       })
@@ -105,10 +125,7 @@ export function AccessDialog({
     const body = JSON.stringify({
       appId,
       userId,
-      roles: roles
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean),
+      roles,
       enabled,
     });
     if (operation.current?.body !== body)
@@ -175,15 +192,30 @@ export function AccessDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="app-access-roles">{t("roles")}</FieldLabel>
-              <Input
-                id="app-access-roles"
-                value={roles}
-                onChange={(e) => setRoles(e.target.value)}
-                required
-              />
-            </Field>
+            <FieldSet>
+              <FieldLegend>{t("roles")}</FieldLegend>
+              <FieldGroup>
+                {definitions.map((r) => (
+                  <Field key={r.key} orientation="horizontal">
+                    <Checkbox
+                      id={"access-role-" + r.key}
+                      disabled={busy}
+                      checked={roles.includes(r.key)}
+                      onCheckedChange={(checked) =>
+                        setRoles((old) =>
+                          checked
+                            ? [...old, r.key]
+                            : old.filter((k) => k !== r.key),
+                        )
+                      }
+                    />
+                    <FieldLabel htmlFor={"access-role-" + r.key}>
+                      {r.name}
+                    </FieldLabel>
+                  </Field>
+                ))}
+              </FieldGroup>
+            </FieldSet>
             <Field>
               <FieldLabel htmlFor="app-access-state">{t("access")}</FieldLabel>
               <Select
@@ -201,7 +233,9 @@ export function AccessDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Button disabled={busy || !userId}>{t("save")}</Button>
+            <Button disabled={busy || !userId || !roles.length}>
+              {t("save")}
+            </Button>
           </FieldGroup>
         </form>
         <Table>
@@ -224,7 +258,7 @@ export function AccessDialog({
                     variant="outline"
                     onClick={() => {
                       setUserId(g.userId);
-                      setRoles(g.roles.join(", "));
+                      setRoles(g.roles);
                       setEnabled(g.enabled);
                     }}
                   >

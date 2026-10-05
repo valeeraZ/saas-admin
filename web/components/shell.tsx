@@ -20,6 +20,7 @@ const nav = [
   { key: "deployments", icon: Box },
   { key: "publications", icon: Download },
   { key: "audit", icon: FileText },
+  { key: "requests", icon: FileText },
 ] as const;
 export function LanguageSwitch() {
   const t = useTranslations("Console"),
