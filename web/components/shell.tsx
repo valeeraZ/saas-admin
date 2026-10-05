@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { key: "applications", icon: LayoutGrid },
   { key: "deployments", icon: Box },
-  { key: "installations", icon: Download },
+  { key: "publications", icon: Download },
   { key: "audit", icon: FileText },
 ] as const;
 export function LanguageSwitch() {

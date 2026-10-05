@@ -50,35 +50,24 @@ async function auth(path: string, bearer: string, body?: unknown) {
   }
   return JSON.parse(Buffer.concat(chunks).toString());
 }
-export async function list(tenant: string, bearer: string, after: string) {
-  const ctx = context.parse(
-    await auth("/v1/tenant-context", bearer, { tenantId: tenant }),
-  );
-  if (ctx.tenant.id !== tenant || ctx.membership.tenantId !== tenant)
-    throw new ApiError(503);
+export async function list(bearer: string, after: string) {
+  const ctx = context.parse(await auth("/v1/me", bearer));
   const rows = (
     await pool.query(
-      `SELECT a.id,a.name,a.description,a.suffix FROM installations i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id WHERE i.tenant_id=$1 AND a.id>$2 AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now() ORDER BY a.id LIMIT 51`,
-      [tenant, after],
+      `SELECT a.id,a.name,a.description,a.suffix FROM app_publications i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id WHERE a.id>$1 AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now() ORDER BY a.id LIMIT 51`,
+      [after],
     )
   ).rows;
   const candidates = rows.slice(0, 50);
   const items = [];
-  // Bounded batches prevent a tenant with many Apps from flooding Auth.
+  // Bounded batches prevent a catalog with many applications from flooding Auth.
   for (let offset = 0; offset < candidates.length; offset += 5) {
     const batch = await Promise.all(
       candidates.slice(offset, offset + 5).map(async (row) => {
         const grant = permissions.parse(
-          await auth(
-            `/v1/tenants/${tenant}/apps/${row.id}/permissions`,
-            bearer,
-          ),
+          await auth(`/v1/apps/${row.id}/permissions`, bearer),
         );
-        if (
-          grant.tenantId !== tenant ||
-          grant.appId !== row.id ||
-          grant.userId !== ctx.membership.userId
-        )
+        if (grant.appId !== row.id || grant.userId !== ctx.user.id)
           throw new ApiError(503);
         return grant.allowed && grant.roles.length
           ? { ...row, roles: grant.roles }
@@ -91,64 +80,51 @@ export async function list(tenant: string, bearer: string, after: string) {
   const eligible = new Set(
     (
       await pool.query(
-        `SELECT i.app_id FROM installations i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id WHERE i.tenant_id=$1 AND i.app_id=ANY($2::uuid[]) AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now()`,
-        [tenant, items.map((i) => i!.id)],
+        `SELECT i.app_id FROM app_publications i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id WHERE i.app_id=ANY($1::uuid[]) AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now()`,
+        [items.map((i) => i!.id)],
       )
     ).rows.map((r) => r.app_id),
   );
   return catalog.parse({
-    tenantId: tenant,
     items: items.filter((i) => eligible.has(i!.id)),
     nextCursor: rows.length > 50 ? candidates.at(-1)!.id : null,
   });
 }
 
 export async function resolve(
-  tenant: string,
   bearer: string,
   mount: string,
   runtimeOnly = false,
 ) {
-  const ctx = context.parse(
-    await auth("/v1/tenant-context", bearer, { tenantId: tenant }),
-  );
-  if (ctx.tenant.id !== tenant || ctx.membership.tenantId !== tenant)
-    throw new ApiError(503);
+  const ctx = context.parse(await auth("/v1/me", bearer));
   const metadata = runtimeOnly
     ? `,rd.runtime,rd.asset_version AS "assetVersion",rd.status,rd.assets_until AS "assetsUntil",d.digest,d.reviewer,d.reviewed_at AS "reviewedAt"`
     : "";
   const runtimeJoin = runtimeOnly
     ? "JOIN runtime_deployments rd ON rd.deployment_id=d.id AND rd.status='ready' AND rd.mount=a.suffix"
     : "";
-  const query = `SELECT a.id AS "appId",a.suffix,d.id AS "deploymentId",r.target_origin AS "targetOrigin"${metadata} FROM installations i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id JOIN deployment_routes r ON r.deployment_id=d.id ${runtimeJoin} WHERE i.tenant_id=$1 AND a.suffix=$2 AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now()`;
-  const before = (await pool.query(query, [tenant, mount])).rows[0];
+  const query = `SELECT a.id AS "appId",a.suffix,d.id AS "deploymentId",r.target_origin AS "targetOrigin"${metadata} FROM app_publications i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id JOIN deployment_routes r ON r.deployment_id=d.id ${runtimeJoin} WHERE a.suffix=$1 AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now()`;
+  const before = (await pool.query(query, [mount])).rows[0];
   if (!before) throw new ApiError(404);
   const grant = permissions.parse(
-    await auth(
-      `/v1/tenants/${tenant}/apps/${before.appId}/permissions`,
-      bearer,
-    ),
+    await auth(`/v1/apps/${before.appId}/permissions`, bearer),
   );
-  if (
-    grant.tenantId !== tenant ||
-    grant.userId !== ctx.membership.userId ||
-    grant.appId !== before.appId
-  )
+  if (grant.userId !== ctx.user.id || grant.appId !== before.appId)
     throw new ApiError(503);
   if (!grant.allowed || !grant.roles.length) throw new ApiError(403);
-  const current = (await pool.query(query, [tenant, mount])).rows[0];
+  const current = (await pool.query(query, [mount])).rows[0];
   if (!current || current.deploymentId !== before.deploymentId)
     throw new ApiError(403);
   if (runtimeOnly) current.reviewedAt = current.reviewedAt.toISOString();
   return (runtimeOnly ? runtimeRoute : resolvedRoute).parse({
     ...current,
-    tenantId: tenant,
+    user: ctx.user,
     userId: grant.userId,
     roles: grant.roles,
   });
 }
 
-// Public build files are tenant-independent; this service API is still Portal-only.
+// Public build files are application-independent; this service API is still Portal-only.
 export async function resolveAsset(mount: string, version: string) {
   const row = (
     await pool.query(

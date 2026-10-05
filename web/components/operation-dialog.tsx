@@ -44,11 +44,11 @@ const definitions: Record<
     fields: ["appId", "targetOrigin", "digest", "runtime", "assetVersion"],
     toggles: [],
   },
-  installation: {
+  publication: {
+    fields: ["appId", "deploymentId", "validUntil"],
     title: "newInstallation",
-    fields: ["tenantId", "appId", "deploymentId", "validUntil"],
     toggles: ["enabled", "entitled"],
-    description: "installationDescription",
+    description: "publicationDescription",
   },
   "deployment-status": {
     title: "approve",
@@ -77,7 +77,6 @@ const definitions: Record<
 };
 const dates = ["validUntil", "assetsUntil"];
 const help: Record<string, string> = {
-  tenantId: "tenantDescription",
   targetOrigin: "originDescription",
   assetVersion: "versionDescription",
   assetsUntil: "assetsDescription",
@@ -119,7 +118,7 @@ export function OperationDialog({
     setError("");
     setReviewed(false);
     operationKey.current = crypto.randomUUID();
-    if (["installation", "runtime-deployment"].includes(edit.kind)) {
+    if (["publication", "runtime-deployment"].includes(edit.kind)) {
       const controller = new AbortController();
       fetch("/api/management?resource=applications", {
         signal: controller.signal,
@@ -144,7 +143,7 @@ export function OperationDialog({
   const confirming = [
     "deployment-status",
     "replace-deployment",
-    "installation",
+    "publication",
     "deployment",
     "route",
   ].includes(edit.kind);

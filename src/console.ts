@@ -4,7 +4,7 @@ import { pool } from "./db.ts";
 export const resources = [
   "applications",
   "deployments",
-  "installations",
+  "publications",
   "audit",
 ] as const;
 export type Resource = (typeof resources)[number];
@@ -34,13 +34,13 @@ const models: Record<
     key: "d.id::text",
     search: "d.id::text || ' ' || a.name || ' ' || d.app_id::text",
   },
-  installations: {
-    select: `i.tenant_id AS "tenantId",i.app_id AS "appId",i.deployment_id AS "deploymentId",
+  publications: {
+    select: `i.app_id AS "appId",i.deployment_id AS "deploymentId",
       a.name AS "appName",i.enabled,i.entitled,i.valid_until AS "validUntil",
       (i.valid_until>now()) AS current`,
-    from: "installations i JOIN app_definitions a ON a.id=i.app_id",
-    key: "i.tenant_id::text || ':' || i.app_id::text",
-    search: "i.tenant_id::text || ' ' || a.name || ' ' || i.app_id::text",
+    from: "app_publications i JOIN app_definitions a ON a.id=i.app_id",
+    key: "i.app_id::text",
+    search: "a.name || ' ' || i.app_id::text",
   },
   audit: {
     select: `o.key,o.actor,o.body,o.created_at AS "createdAt"`,
