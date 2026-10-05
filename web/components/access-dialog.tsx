@@ -130,7 +130,11 @@ export function AccessDialog({
       operation.current = null;
       setRevision((x) => x + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "unavailable");
+      setError(
+        e instanceof Error && e.message === "invalid"
+          ? "invalid"
+          : "unavailable",
+      );
     } finally {
       setBusy(false);
     }
