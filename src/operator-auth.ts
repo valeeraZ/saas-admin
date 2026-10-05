@@ -48,7 +48,7 @@ export async function operatorAuth(
       const { done, value } = await reader.read();
       if (done) break;
       size += value.length;
-      if (size > 262144) {
+      if (size > 1048576) {
         await reader.cancel();
         throw new ApiError(503);
       }

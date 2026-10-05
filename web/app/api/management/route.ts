@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { roleConfiguration } from "@/lib/access-contracts";
 import { operatorAuth } from "../../../../src/operator-auth.ts";
 import { ApiError } from "../../../../src/service.ts";
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     checkMutation(request, s.csrf);
     if (process.env.ADMIN_ENABLE_OPERATOR !== "true")
       throw new ConsoleError("writesDisabled", 403);
-    const body = await boundedJSON(request, 262144),
+    const body = await boundedJSON(request, 1048576),
       key = request.headers.get("idempotency-key") ?? "";
     if (!/^[A-Za-z0-9_-]{16,128}$/.test(key))
       throw new ConsoleError("invalid", 400);
@@ -65,7 +66,9 @@ export async function POST(request: Request) {
           `/v1/operator/apps/${parsed.id}/roles`,
           `oidc:${s.sub}`,
           roleConfig,
-          key + "-roles",
+          createHash("sha256")
+            .update("roles:" + key)
+            .digest("hex"),
         );
     } catch (e) {
       // Database/network failures remain 503; domain validation produces a localized conflict.
