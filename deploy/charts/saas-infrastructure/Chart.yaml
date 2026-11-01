@@ -1,0 +1,5 @@
+apiVersion: v2
+name: saas-infrastructure
+description: Persistent PostgreSQL and operator-managed Keycloak for a single cluster
+type: application
+version: 0.1.0

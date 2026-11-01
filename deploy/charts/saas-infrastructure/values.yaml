@@ -1,0 +1,19 @@
+namePrefix: saas
+postgres:
+  enabled: false
+  image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+  bootstrapSecret: saas-postgres-bootstrap
+  storage: 20Gi
+  storageClassName: ""
+keycloak:
+  enabled: true
+  image: quay.io/keycloak/keycloak:26.7.3@sha256:ff4257d0d64efbe99ed1ddfaf07765cc3c36dc7518bf8324d41961327f441c54
+  hostname: ""
+  tlsSecret: saas-public-tls
+  ingressClassName: ""
+  databaseHost: ""
+  database: keycloak
+  databaseSecret: saas-keycloak-db
+  databaseTls: false
+  trustSecret: saas-trust
+  resources: {requests: {cpu: 250m, memory: 512Mi}, limits: {memory: 1Gi}}

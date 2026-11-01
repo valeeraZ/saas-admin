@@ -1,0 +1,80 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.namePrefix }}-postgres
+spec:
+  clusterIP: None
+  selector: {app.kubernetes.io/name: {{ .Values.namePrefix }}-postgres}
+  ports: [{name: postgres, port: 5432, targetPort: 5432}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.namePrefix }}-postgres
+spec:
+  serviceName: {{ .Values.namePrefix }}-postgres
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy: {whenDeleted: Retain, whenScaled: Retain}
+  selector:
+    matchLabels: {app.kubernetes.io/name: {{ .Values.namePrefix }}-postgres}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: {{ .Values.namePrefix }}-postgres}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 70
+        runAsGroup: 70
+        runAsNonRoot: true
+        fsGroup: 70
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image | quote }}
+          env:
+            - {name: POSTGRES_USER, value: platform_bootstrap}
+            - {name: POSTGRES_DB, value: postgres}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.postgres.bootstrapSecret }}, key: POSTGRES_PASSWORD}
+          ports: [{name: postgres, containerPort: 5432}]
+          startupProbe:
+            exec: {command: [pg_isready, -h, 127.0.0.1, -U, platform_bootstrap, -d, postgres]}
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec: {command: [pg_isready, -h, 127.0.0.1, -U, platform_bootstrap, -d, postgres]}
+            periodSeconds: 5
+          livenessProbe:
+            exec: {command: [pg_isready, -h, 127.0.0.1, -U, platform_bootstrap, -d, postgres]}
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 1Gi}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: runtime, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
+            - {name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true}
+      volumes:
+        - {name: runtime, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+        - name: init
+          secret:
+            secretName: {{ .Values.postgres.bootstrapSecret }}
+            items: [{key: init.sql, path: 01-platform.sql}]
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.postgres.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests: {storage: {{ .Values.postgres.storage }}}
+{{- end }}

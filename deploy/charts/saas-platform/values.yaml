@@ -1,0 +1,75 @@
+namePrefix: saas
+imagePullSecrets: []
+trustSecret: saas-trust
+signingSecret: saas-portal-signing
+proxyImage: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  tlsSecret: saas-public-tls
+  portalHost: ""
+  consoleHost: ""
+workloads:
+  auth:
+    image: ""
+    replicas: 1
+    port: 8000
+    secret: saas-auth
+    env: {}
+    livePath: /health/live
+    readyPath: /health/ready
+    tlsSecret: saas-auth-tls
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {memory: 512Mi}}
+  worker:
+    image: ""
+    replicas: 1
+    secret: saas-worker
+    env: {}
+    command: [saas-auth, private-tasks-worker]
+    resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 256Mi}}
+  admin-api:
+    image: ""
+    replicas: 1
+    port: 59100
+    secret: saas-admin-api
+    env: {HOST: 0.0.0.0, PORT: "59100"}
+    livePath: ""
+    readyPath: /health/ready
+    tlsSecret: saas-admin-api-tls
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {memory: 512Mi}}
+  console:
+    image: ""
+    replicas: 1
+    port: 3000
+    secret: saas-console
+    env: {}
+    livePath: /api/health/live
+    readyPath: /api/health/ready
+    resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 768Mi}}
+  portal:
+    image: ""
+    replicas: 1
+    port: 3000
+    secret: saas-portal
+    env: {PORT: "3000", PORTAL_BIND_HOST: 0.0.0.0}
+    livePath: /api/health/live
+    readyPath: /api/health/ready
+    resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 768Mi}}
+migrations:
+  auth:
+    workload: auth
+    secret: saas-auth-migrate
+    command: [saas-auth, migrate]
+    env: {}
+  admin:
+    workload: admin-api
+    secret: saas-admin-migrate
+    command: [sh, -c, "node src/cli.ts migrate && node scripts/database-grants.ts"]
+    env: {ADMIN_API_DATABASE_ROLE: saas_admin_api, ADMIN_CONSOLE_DATABASE_ROLE: saas_console}
+  portal:
+    workload: portal
+    secret: saas-portal-migrate
+    command: [node, scripts/migrate.ts]
+    env: {}
+pruneSchedule: "17 * * * *"

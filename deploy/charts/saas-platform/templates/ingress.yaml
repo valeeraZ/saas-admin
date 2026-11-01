@@ -1,0 +1,29 @@
+{{- if .Values.ingress.enabled }}
+{{- range $name, $host := dict "portal" .Values.ingress.portalHost "console" .Values.ingress.consoleHost }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $.Values.namePrefix }}-{{ $name }}
+  {{- with $.Values.ingress.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $.Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    - secretName: {{ required "ingress.tlsSecret required" $.Values.ingress.tlsSecret }}
+      hosts: [{{ required "Portal and console hostnames required" $host | quote }}]
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.Values.namePrefix }}-{{ $name }}
+                port: {number: 3000}
+{{- end }}
+{{- end }}
