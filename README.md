@@ -1,5 +1,7 @@
 # Current platform
 
+Single-cluster deployment: [Kubernetes / Helm guide](deploy/README.md), [executed validation](deploy/VALIDATION.md).
+
 See [User/application administration](docs/USER-APP-PLATFORM.md). Historical tenant installation instructions below are superseded.
 
 # SaaS Admin

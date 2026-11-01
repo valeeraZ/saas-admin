@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Values.namePrefix }}-session-prune
+spec:
+  schedule: {{ .Values.pruneSchedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 120
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: portal
+              image: {{ include "saas.image" .Values.workloads.portal.image | quote }}
+              command: [node, scripts/prune.ts]
+              envFrom: [{secretRef: {name: {{ .Values.migrations.portal.secret }}}}]
+              securityContext: {{ include "saas.security" . | nindent 16 }}
+              resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {memory: 256Mi}}
+              volumeMounts: [{name: trust, mountPath: /run/trust, readOnly: true}]
+            - name: console
+              image: {{ include "saas.image" (index .Values.workloads "admin-api").image | quote }}
+              command: [node, --input-type=module, -e]
+              args:
+                - "import {pool} from './src/db.ts'; try { await pool.query(\"DELETE FROM admin_console_sessions WHERE expires_at<now() OR (kind='session' AND last_seen<now()-interval '30 minutes')\"); } finally { await pool.end(); }"
+              envFrom: [{secretRef: {name: saas-console-prune}}]
+              securityContext: {{ include "saas.security" . | nindent 16 }}
+              resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {memory: 256Mi}}
+              volumeMounts: [{name: trust, mountPath: /run/trust, readOnly: true}]
+          volumes:
+            - name: trust
+              secret: {secretName: {{ .Values.trustSecret }}}

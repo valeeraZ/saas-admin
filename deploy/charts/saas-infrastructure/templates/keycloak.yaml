@@ -1,0 +1,37 @@
+{{- if .Values.keycloak.enabled }}
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: {{ .Values.namePrefix }}-keycloak
+spec:
+  instances: 1
+  image: {{ .Values.keycloak.image | quote }}
+  startOptimized: false
+  hostname:
+    hostname: {{ required "keycloak.hostname required" .Values.keycloak.hostname | quote }}
+  http:
+    httpEnabled: true
+  proxy:
+    headers: xforwarded
+  ingress:
+    enabled: true
+    tlsSecret: {{ .Values.keycloak.tlsSecret }}
+    {{- with .Values.keycloak.ingressClassName }}
+    className: {{ . }}
+    {{- end }}
+  db:
+    vendor: postgres
+    host: {{ required "keycloak.databaseHost required" .Values.keycloak.databaseHost | quote }}
+    database: {{ .Values.keycloak.database }}
+    usernameSecret: {name: {{ .Values.keycloak.databaseSecret }}, key: username}
+    passwordSecret: {name: {{ .Values.keycloak.databaseSecret }}, key: password}
+  resources: {{ toYaml .Values.keycloak.resources | nindent 4 }}
+  {{- if .Values.keycloak.databaseTls }}
+  additionalOptions:
+    - name: db-url-properties
+      value: "sslmode=verify-full&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory"
+  truststores:
+    database:
+      secret: {name: {{ .Values.keycloak.trustSecret }}}
+  {{- end }}
+{{- end }}

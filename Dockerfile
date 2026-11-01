@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY src ./src
 COPY migrations ./migrations
+COPY scripts ./scripts
 USER node
 ENV HOST=0.0.0.0 PORT=59100
 EXPOSE 59100
