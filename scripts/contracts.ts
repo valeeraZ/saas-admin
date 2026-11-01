@@ -15,7 +15,7 @@ const error = {
 };
 const spec = {
   openapi: "3.1.0",
-  info: { title: "SaaS Admin Catalog", version: "0.1.0" },
+  info: { title: "SaaS Admin Catalog", version: "0.2.0" },
   paths: {
     "/v1/runtime/assets": {
       get: {
@@ -51,19 +51,13 @@ const spec = {
         },
       },
     },
-    "/v1/tenants/{tenantId}/catalog": {
+    "/v1/catalog": {
       get: {
-        operationId: "listTenantCatalog",
+        operationId: "listUserCatalog",
         description:
-          "Portal BFF only. Auth bearer is forwarded exclusively to Auth for online membership and role verification; service credential authenticates Portal. No authorization cache.",
+          "Portal BFF only. Auth bearer is forwarded exclusively to Auth for online identity and application grant verification; service credential authenticates Portal. No authorization cache.",
         security: [{ portalKey: [], authDelegation: [] }],
         parameters: [
-          {
-            name: "tenantId",
-            in: "path",
-            required: true,
-            schema: { type: "string", format: "uuid" },
-          },
           {
             name: "cursor",
             in: "query",
@@ -95,19 +89,13 @@ const spec = {
         },
       },
     },
-    "/v1/tenants/{tenantId}/route": {
+    "/v1/route": {
       get: {
-        operationId: "resolveTenantApplication",
+        operationId: "resolveUserApplication",
         description:
           "Private Portal-only route resolution; checks live Auth and Admin eligibility. Internal target must never be returned to browsers.",
         security: [{ portalKey: [], authDelegation: [] }],
         parameters: [
-          {
-            name: "tenantId",
-            in: "path",
-            required: true,
-            schema: { type: "string", format: "uuid" },
-          },
           {
             name: "suffix",
             in: "query",
@@ -157,14 +145,14 @@ const spec = {
   },
 };
 Object.assign(spec.paths, {
-  "/v1/tenants/{tenantId}/runtime-route": {
+  "/v1/runtime-route": {
     get: {
-      ...spec.paths["/v1/tenants/{tenantId}/route"].get,
+      ...spec.paths["/v1/route"].get,
       operationId: "resolveRuntimeApplication",
       description:
         "Online Auth and Admin checks with immutable reviewed runtime metadata. No authorization or route cache.",
       responses: {
-        ...spec.paths["/v1/tenants/{tenantId}/route"].get.responses,
+        ...spec.paths["/v1/route"].get.responses,
         "200": {
           description: "Ready runtime route",
           content: {

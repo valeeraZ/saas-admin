@@ -117,7 +117,7 @@ export async function applyRuntime(
     if (!future.rows[0].valid)
       throw Error("Compatibility window must end in the future");
     await c.query(
-      "UPDATE installations SET deployment_id=$2 WHERE deployment_id=$1",
+      "UPDATE app_publications SET deployment_id=$2 WHERE deployment_id=$1",
       [body.deploymentId, body.replacementId],
     );
     await c.query(

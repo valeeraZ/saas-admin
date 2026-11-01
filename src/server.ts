@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { settings } from "./config.ts";
 import { pool } from "./db.ts";
-import { tenantId } from "./contracts.ts";
+import { entityId } from "./contracts.ts";
 import { list, resolve, resolveAsset, ApiError } from "./service.ts";
 const config = settings();
 const hash = (s: string) => createHash("sha256").update(s).digest();
@@ -18,7 +18,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", "http://internal");
     if (req.method === "GET" && url.pathname === "/health/ready") {
-      await pool.query("SELECT 1 FROM installations LIMIT 1");
+      await pool.query("SELECT 1 FROM app_publications LIMIT 1");
       await pool.query("SELECT 1 FROM deployment_routes LIMIT 1");
       await pool.query("SELECT 1 FROM runtime_deployments LIMIT 1");
       return send(200, { status: "ready" });
@@ -49,16 +49,12 @@ const server = createServer(async (req, res) => {
         throw new ApiError(400);
       return send(200, await resolveAsset(mount, version));
     }
-    const match = url.pathname.match(
-      /^\/v1\/tenants\/([^/]+)\/(catalog|route|runtime-route)$/,
-    );
+    const match = url.pathname.match(/^\/v1\/(catalog|route|runtime-route)$/);
     if (!match || req.method !== "GET") throw new ApiError(404);
-    const tenant = tenantId.safeParse(match[1]);
-    if (match[2] === "route" || match[2] === "runtime-route") {
+    if (match[1] === "route" || match[1] === "runtime-route") {
       const mount = url.searchParams.get("suffix");
       const bearer = req.headers.authorization;
       if (
-        !tenant.success ||
         !mount ||
         url.searchParams.getAll("suffix").length !== 1 ||
         !/^\/[a-z][a-z0-9-]{0,62}$/.test(mount) ||
@@ -69,15 +65,14 @@ const server = createServer(async (req, res) => {
         throw new ApiError(401);
       return send(
         200,
-        await resolve(tenant.data, bearer, mount, match[2] === "runtime-route"),
+        await resolve(bearer, mount, match[1] === "runtime-route"),
       );
     }
 
-    const cursor = tenantId.safeParse(
+    const cursor = entityId.safeParse(
       url.searchParams.get("cursor") ?? "00000000-0000-0000-0000-000000000000",
     );
     if (
-      !tenant.success ||
       !cursor.success ||
       [...url.searchParams.keys()].some((k) => k !== "cursor")
     )
@@ -85,7 +80,7 @@ const server = createServer(async (req, res) => {
     const bearer = req.headers.authorization;
     if (!bearer?.startsWith("Bearer ") || bearer.length > 16384)
       throw new ApiError(401);
-    return send(200, await list(tenant.data, bearer, cursor.data));
+    return send(200, await list(bearer, cursor.data));
   } catch (e) {
     const status = e instanceof ApiError ? e.status : 503;
     send(status, {

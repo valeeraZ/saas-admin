@@ -1,3 +1,7 @@
+# Current platform
+
+See [User/application administration](docs/USER-APP-PLATFORM.md). Historical tenant installation instructions below are superseded.
+
 # SaaS Admin
 
 Admin owns application definitions, reviewed deployments and tenant installation/entitlement facts. This first service exposes a real PostgreSQL-backed catalog consumed by Portal. Auth owns users, tenant membership and application roles; every catalog request checks them online.

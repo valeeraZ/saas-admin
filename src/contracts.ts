@@ -93,8 +93,7 @@ export const operation = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
-      kind: z.literal("installation"),
-      tenantId: uuid,
+      kind: z.literal("publication"),
       appId: uuid,
       deploymentId: uuid,
       enabled: z.boolean(),
@@ -103,17 +102,17 @@ export const operation = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-export const tenantId = uuid;
+export const entityId = uuid;
 export const context = z.object({
-  tenant: z.object({ id: uuid, status: z.literal("active") }),
-  membership: z.object({
-    tenantId: uuid,
-    userId: uuid,
+  user: z.object({
+    id: uuid,
+    displayName: z.string().max(200),
+    email: z.string().max(254),
+    emailVerified: z.boolean(),
     status: z.literal("active"),
   }),
 });
 export const permissions = z.object({
-  tenantId: uuid,
   userId: uuid,
   appId: uuid,
   allowed: z.boolean(),
@@ -130,7 +129,6 @@ export const item = z
   .strict();
 export const catalog = z
   .object({
-    tenantId: uuid,
     items: z.array(item).max(50),
     nextCursor: uuid.nullable(),
   })
@@ -138,7 +136,7 @@ export const catalog = z
 
 export const resolvedRoute = z
   .object({
-    tenantId: uuid,
+    user: context.shape.user,
     userId: uuid,
     appId: uuid,
     deploymentId: uuid,

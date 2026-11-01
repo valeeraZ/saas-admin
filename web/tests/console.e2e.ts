@@ -86,7 +86,7 @@ try {
     return (await r.json()).items;
   }
   for (const [name, description, mount] of [
-    ["Tenant Reports", "Reporting for tenant activity and usage.", "/reports"],
+    ["Reports", "Reporting for application activity and usage.", "/reports"],
     [
       "Next Reports",
       "Operational reports for the next platform.",
@@ -112,7 +112,7 @@ try {
     await page.getByText(name, { exact: true }).waitFor();
   }
   const apps = await read("applications"),
-    app = apps.find((r: { name: string }) => r.name === "Tenant Reports");
+    app = apps.find((r: { name: string }) => r.name === "Reports");
   assert.ok(app);
   const metrics = apps.find((r: { name: string }) => r.name === "Next Metrics");
   assert.equal(
@@ -146,7 +146,9 @@ try {
     .getByRole("dialog")
     .getByRole("button", { name: "Cancel", exact: true })
     .click();
-  const appRow = page.getByRole("row").filter({ hasText: "Tenant Reports" });
+  const appRow = page
+    .getByRole("row")
+    .filter({ has: page.getByText("Reports", { exact: true }) });
   await appRow.getByRole("button", { name: "Edit", exact: true }).click();
   assert.equal(
     await page.getByLabel("Mount", { exact: true }).getAttribute("readonly"),
@@ -207,6 +209,75 @@ try {
   console.log(
     "PASS real operator login, bilingual-ready persisted applications, immutable mount, audit actor, CSRF and idempotency",
   );
+  await appRow
+    .getByRole("button", { name: "Manage access", exact: true })
+    .click();
+  let access = page.getByRole("dialog");
+  await access.getByLabel("User", { exact: true }).click();
+  await page
+    .getByRole("option", { name: "Example Member · member@example.test" })
+    .click();
+  await access
+    .getByLabel("Roles (comma-separated)", { exact: true })
+    .fill("viewer, editor");
+  await access
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await access
+    .getByRole("row")
+    .filter({ hasText: "Example Member" })
+    .getByText("editor, viewer", { exact: true })
+    .waitFor();
+  const accessBody = {
+    appId: app.id,
+    userId: process.env.CONSOLE_TEST_USER_ID,
+    roles: ["viewer"],
+    enabled: false,
+  };
+  assert.equal(
+    (
+      await context.request.post(origin + "/api/access", {
+        headers: { ...headers, "x-csrf-token": "bad" },
+        data: accessBody,
+      })
+    ).status(),
+    403,
+  );
+  assert.equal(
+    (
+      await context.request.post(origin + "/api/access", {
+        headers: { ...headers, "idempotency-key": randomUUID() },
+        data: { ...accessBody, actor: "forged" },
+      })
+    ).status(),
+    400,
+  );
+  assert.equal(
+    (
+      await context.request.post(origin + "/api/access", {
+        headers: { ...headers, "idempotency-key": randomUUID() },
+        data: accessBody,
+      })
+    ).status(),
+    200,
+  );
+  const accessResult = await context.request.get(
+    origin + "/api/access?kind=grants&appId=" + app.id,
+  );
+  const savedGrant = (await accessResult.json()).items[0];
+  assert.equal(savedGrant.enabled, false);
+  assert.equal(
+    (
+      await context.request.get(
+        origin + "/api/access?kind=users&appId=" + app.id,
+      )
+    ).status(),
+    200,
+  );
+  await page.keyboard.press("Escape");
+  console.log(
+    "PASS real Auth user grant through console UI, revocation, CSRF and forged audit actor rejection",
+  );
   await page.getByRole("link", { name: "Deployments", exact: true }).click();
   await page
     .getByRole("button", { name: "Register deployment", exact: true })
@@ -224,11 +295,9 @@ try {
     .click();
   await dialog.waitFor({ state: "hidden" });
   await page.getByText("Pending", { exact: true }).waitFor();
-  const deployment = (await read("deployments"))[0],
-    tenantId = randomUUID();
+  const deployment = (await read("deployments"))[0];
   const installation = {
-    kind: "installation",
-    tenantId,
+    kind: "publication",
     appId: app.id,
     deploymentId: deployment.id,
     enabled: true,
@@ -244,12 +313,11 @@ try {
   await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
   await dialog.waitFor({ state: "hidden" });
   await page.getByText("Ready", { exact: true }).waitFor();
-  await page.getByRole("link", { name: "Installations", exact: true }).click();
+  await page.getByRole("link", { name: "Publications", exact: true }).click();
   await page
-    .getByRole("button", { name: "Add installation", exact: true })
+    .getByRole("button", { name: "Add publication", exact: true })
     .click();
   dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Tenant ID", { exact: true }).fill(tenantId);
   await dialog.getByLabel("Application ID", { exact: true }).fill(app.id);
   await dialog.getByLabel("Deployment ID", { exact: true }).fill(deployment.id);
   await dialog
@@ -260,7 +328,7 @@ try {
     .check();
   await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
   await dialog.waitFor({ state: "hidden" });
-  await page.getByText(tenantId, { exact: true }).waitFor();
+  await page.getByRole("cell", { name: deployment.id, exact: true }).waitFor();
   const replacement = randomUUID();
   assert.equal(
     (
@@ -299,7 +367,7 @@ try {
   await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
   await dialog.waitFor({ state: "hidden" });
   await page.getByText("Retired", { exact: true }).waitFor();
-  assert.equal((await read("installations"))[0].deploymentId, replacement);
+  assert.equal((await read("publications"))[0].deploymentId, replacement);
   const nextRow = page.getByRole("row").filter({ hasText: replacement });
   await nextRow
     .getByRole("button", { name: "Revoke deployment", exact: true })
@@ -320,7 +388,7 @@ try {
     409,
   );
   console.log(
-    "PASS UI deployment registration/approval, installation, atomic replacement/retention and terminal revocation",
+    "PASS UI deployment registration/approval, publication, atomic replacement/retention and terminal revocation",
   );
   await page.getByRole("link", { name: "Audit log", exact: true }).click();
   await page.getByRole("heading", { name: "Audit log", exact: true }).waitFor();

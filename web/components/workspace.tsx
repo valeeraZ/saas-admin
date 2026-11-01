@@ -36,6 +36,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {AccessDialog} from "./access-dialog";
 import { OperationDialog, type Edit } from "./operation-dialog";
 import type { Resource } from "../../src/console.ts";
 type Row = Record<string, unknown>;
@@ -59,6 +60,7 @@ export function Workspace({
     [notice, setNotice] = useState(false),
     [edit, setEdit] = useState<Edit | null>(null),
     [details, setDetails] = useState<Row | null>(null);
+  const [access,setAccess]=useState<Row|null>(null);
   const request = useRef<AbortController | null>(null);
   async function load(more = false, search = q) {
     request.current?.abort();
@@ -119,9 +121,8 @@ export function Workspace({
               },
             }
           : {
-              kind: "installation",
+              kind: "publication",
               values: {
-                tenantId: "",
                 appId: "",
                 deploymentId: "",
                 enabled: true,
@@ -166,6 +167,7 @@ export function Workspace({
   );
   return (
     <>
+      {access?<AccessDialog appId={text(access,"id")} name={text(access,"name")} csrf={csrf} onClose={()=>setAccess(null)}/>:null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-[32px] font-semibold tracking-tight">
@@ -245,10 +247,9 @@ export function Workspace({
                       "reviewer",
                       "actions",
                     ]
-                  : resource === "installations"
+                  : resource === "publications"
                     ? [
                         "application",
-                        "tenantId",
                         "deploymentId",
                         "access",
                         "validUntil",
@@ -296,6 +297,7 @@ export function Workspace({
                           <Pencil data-icon="inline-start" />
                           {t("edit")}
                         </Button>
+                        <Button variant="outline" onClick={()=>setAccess(r)}>{t("manageAccess")}</Button>
                         <Button variant="ghost" onClick={() => setDetails(r)}>
                           {t("details")}
                         </Button>
@@ -423,12 +425,9 @@ export function Workspace({
                       </div>
                     </TableCell>
                   </>
-                ) : resource === "installations" ? (
+                ) : resource === "publications" ? (
                   <>
                     <TableCell className="py-5">{application(r)}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {text(r, "tenantId")}
-                    </TableCell>
                     <TableCell className="font-mono text-xs">
                       {text(r, "deploymentId")}
                     </TableCell>
@@ -445,9 +444,8 @@ export function Workspace({
                         variant="outline"
                         onClick={() =>
                           setEdit({
-                            kind: "installation",
+                            kind: "publication",
                             values: {
-                              tenantId: text(r, "tenantId"),
                               appId: text(r, "appId"),
                               deploymentId: text(r, "deploymentId"),
                               enabled: Boolean(r.enabled),
