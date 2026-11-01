@@ -7,6 +7,7 @@ import {
   resolvedRoute,
   runtimeRoute,
   runtimeMetadata,
+  discovery,
 } from "./contracts.ts";
 export class ApiError extends Error {
   status: number;
@@ -144,5 +145,20 @@ export async function resolveAsset(mount: string, version: string) {
     ...row,
     reviewedAt: row.reviewedAt.toISOString(),
     assetsUntil: row.assetsUntil?.toISOString() ?? null,
+  });
+}
+
+/** Public-facing discovery metadata; route origins stay private. */
+export async function discover(bearer: string, after: string) {
+  context.parse(await auth("/v1/me", bearer));
+  const rows = (
+    await pool.query(
+      `SELECT a.id,a.name,a.description,a.suffix FROM app_publications i JOIN app_definitions a ON a.id=i.app_id JOIN deployments d ON d.id=i.deployment_id AND d.app_id=i.app_id WHERE a.id>$1 AND a.active AND d.ready AND i.enabled AND i.entitled AND i.valid_until>now() ORDER BY a.id LIMIT 51`,
+      [after],
+    )
+  ).rows;
+  return discovery.parse({
+    items: rows.slice(0, 50),
+    nextCursor: rows.length > 50 ? rows[49].id : null,
   });
 }

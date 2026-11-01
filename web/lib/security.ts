@@ -73,7 +73,7 @@ export function checkMutation(request: Request, csrf: string) {
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
     throw new ConsoleError("csrf", 403);
 }
-export async function boundedJSON(request: Request) {
+export async function boundedJSON(request: Request, limit = 16384) {
   if (
     !request.headers
       .get("content-type")
@@ -90,7 +90,7 @@ export async function boundedJSON(request: Request) {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.length;
-      if (size > 16384) throw new ConsoleError("tooLarge", 413);
+      if (size > limit) throw new ConsoleError("tooLarge", 413);
       chunks.push(value);
     }
   } finally {

@@ -164,3 +164,21 @@ export const runtimeMetadata = z
 export const runtimeRoute = resolvedRoute
   .extend(runtimeMetadata.shape)
   .strict();
+
+export const discovery = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            id: entityId,
+            name: z.string().min(1).max(200),
+            description: z.string().max(1000),
+            suffix,
+          })
+          .strict(),
+      )
+      .max(50),
+    nextCursor: entityId.nullable(),
+  })
+  .strict();

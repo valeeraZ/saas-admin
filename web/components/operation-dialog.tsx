@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { RolesEditor } from "./roles-editor";
+import type { AppRole } from "@/lib/access-contracts";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -107,6 +109,11 @@ export function OperationDialog({
     [busy, setBusy] = useState(false),
     [reviewed, setReviewed] = useState(false),
     [choices, setChoices] = useState<{ id: string; name: string }[]>([]);
+  const [roleConfig, setRoleConfig] = useState<{
+    version: number;
+    roles: AppRole[];
+  }>({ version: 0, roles: [] });
+  const [rolesLoading, setRolesLoading] = useState(false);
   const operationKey = useRef("");
   useEffect(() => {
     if (!edit) return;
@@ -115,6 +122,34 @@ export function OperationDialog({
       if (typeof next[key] === "string" && next[key])
         next[key] = localDate(String(next[key]));
     setValues(next);
+    setRoleConfig({ version: 0, roles: [] });
+    if (edit.kind === "app" && edit.values.existing) {
+      const controller = new AbortController();
+      setRolesLoading(true);
+      fetch("/api/roles?appId=" + edit.values.id, {
+        signal: controller.signal,
+        cache: "no-store",
+      })
+        .then(async (r) => {
+          if (!r.ok) throw Error();
+          return r.json();
+        })
+        .then((data) => {
+          if (!controller.signal.aborted)
+            setRoleConfig({ version: data.version, roles: data.roles });
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setError("roleUnavailable");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setRolesLoading(false);
+        });
+      setError("");
+      setReviewed(false);
+      operationKey.current = crypto.randomUUID();
+      return () => controller.abort();
+    }
+    setRolesLoading(false);
     setError("");
     setReviewed(false);
     operationKey.current = crypto.randomUUID();
@@ -164,6 +199,7 @@ export function OperationDialog({
     try {
       const body: Record<string, unknown> = { kind: edit.kind, ...values };
       delete body.existing;
+      if (edit.kind === "app") body.roleConfiguration = roleConfig;
       for (const key of dates)
         if (body[key]) body[key] = new Date(String(body[key])).toISOString();
       if (edit.kind === "runtime-deployment")
@@ -186,6 +222,8 @@ export function OperationDialog({
       const code = e instanceof Error ? e.message : "unavailable";
       setError(
         [
+          "roleConflict",
+          "roleUnavailable",
           "invalid",
           "conflict",
           "csrf",
@@ -301,6 +339,16 @@ export function OperationDialog({
                 />
               </Field>
             ))}
+            {edit.kind === "app" ? (
+              <RolesEditor
+                value={roleConfig.roles}
+                disabled={busy || rolesLoading}
+                onChange={(roles) => {
+                  setRoleConfig((old) => ({ ...old, roles }));
+                  operationKey.current = crypto.randomUUID();
+                }}
+              />
+            ) : null}
             {confirming ? (
               <Field orientation="horizontal">
                 <FieldLabel htmlFor="operation-reviewed">
@@ -331,7 +379,12 @@ export function OperationDialog({
             <Button
               type="submit"
               variant={revoking ? "destructive" : "default"}
-              disabled={busy || (confirming && !reviewed)}
+              disabled={
+                busy ||
+                rolesLoading ||
+                error === "roleUnavailable" ||
+                (confirming && !reviewed)
+              }
             >
               {t(
                 busy

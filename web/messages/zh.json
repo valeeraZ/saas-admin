@@ -100,7 +100,10 @@
       "conflict": "操作与当前注册表状态冲突，请检查不可变字段、部署状态、目标地址策略及兼容期限。",
       "csrf": "请求验证失败，请刷新页面后重试。",
       "tooLarge": "请求内容过大。",
-      "writesDisabled": "当前管理台未启用运维写入。"
+      "writesDisabled": "当前管理台未启用运维写入。",
+      "roleConflict": "应用信息已保存，但角色定义已被修改。请重新打开编辑窗口后重试。",
+      "roleUnavailable": "无法保存或加载角色定义。应用信息可能已保存，请重新打开编辑窗口后重试。",
+      "requestConflict": "申请已被审批，或包含已停用的角色。请刷新列表并检查应用角色。"
     },
     "operationKinds": {
       "app": "更新应用",
@@ -118,6 +121,22 @@
     "manageAccess": "管理权限",
     "user": "用户",
     "selectUser": "选择已登录平台注册的用户",
-    "roles": "应用角色（以逗号分隔）"
+    "roles": "应用角色",
+    "requests": "权限申请",
+    "requestsDescription": "查看应用权限申请，记录审批结果和意见。",
+    "requestsEmpty": "此状态下暂无权限申请。",
+    "rolesDescription": "定义业务角色。移除或停用角色会撤销该角色的已有授权。",
+    "roleNumber": "角色 {number}",
+    "roleKey": "角色标识",
+    "roleName": "显示名称",
+    "addRole": "添加角色",
+    "removeRole": "移除角色",
+    "approved": "已批准",
+    "rejected": "已拒绝",
+    "all": "全部申请",
+    "approveRequest": "批准权限",
+    "rejectRequest": "拒绝权限",
+    "comment": "审批意见",
+    "review": "审批记录"
   }
 }

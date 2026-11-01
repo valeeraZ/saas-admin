@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { z } from "zod";
 import {
   catalog,
+  discovery,
   operation,
   resolvedRoute,
   runtimeRoute,
@@ -145,6 +146,23 @@ const spec = {
   },
 };
 Object.assign(spec.paths, {
+  "/v1/discovery": {
+    get: {
+      ...spec.paths["/v1/catalog"].get,
+      operationId: "discoverPublishedApps",
+      description:
+        "Authenticated Portal-only discovery of all eligible publications, including apps without a user grant. No internal target or permission is returned.",
+      responses: {
+        ...spec.paths["/v1/catalog"].get.responses,
+        "200": {
+          description: "Published apps available for discovery",
+          content: {
+            "application/json": { schema: z.toJSONSchema(discovery) },
+          },
+        },
+      },
+    },
+  },
   "/v1/runtime-route": {
     get: {
       ...spec.paths["/v1/route"].get,

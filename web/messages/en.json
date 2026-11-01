@@ -100,7 +100,10 @@
       "conflict": "The operation conflicts with the current registry state. Check immutable fields, deployment status, origin policy and compatibility deadline.",
       "csrf": "The request could not be verified. Refresh the page and try again.",
       "tooLarge": "The request is too large.",
-      "writesDisabled": "Operator writes are disabled for this console."
+      "writesDisabled": "Operator writes are disabled for this console.",
+      "roleConflict": "Application details were saved, but role definitions changed. Reopen the editor and retry.",
+      "roleUnavailable": "Role definitions could not be saved or loaded. Application details may have been saved. Reopen the editor and retry.",
+      "requestConflict": "This request was already reviewed or contains a retired role. Refresh the list and check the application roles."
     },
     "operationKinds": {
       "app": "Application updated",
@@ -118,6 +121,22 @@
     "manageAccess": "Manage access",
     "user": "User",
     "selectUser": "Select a registered user",
-    "roles": "Roles (comma-separated)"
+    "roles": "Application roles",
+    "requests": "Access requests",
+    "requestsDescription": "Review application access requests and record your decision.",
+    "requestsEmpty": "No access requests match this status.",
+    "rolesDescription": "Define business roles. Removing or disabling a role revokes existing access to that role.",
+    "roleNumber": "Role {number}",
+    "roleKey": "Role key",
+    "roleName": "Display name",
+    "addRole": "Add role",
+    "removeRole": "Remove role",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "all": "All requests",
+    "approveRequest": "Approve access",
+    "rejectRequest": "Reject access",
+    "comment": "Review comment",
+    "review": "Review"
   }
 }

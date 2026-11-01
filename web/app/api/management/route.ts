@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { roleConfiguration } from "@/lib/access-contracts";
+import { operatorAuth } from "../../../../src/operator-auth.ts";
+import { ApiError } from "../../../../src/service.ts";
 import { NextResponse } from "next/server";
 import { readConsole, consoleQuery } from "../../../../src/console.ts";
 import { apply, pool } from "../../../../src/db.ts";
@@ -19,7 +23,14 @@ export async function GET(request: Request) {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (e) {
-    return failure(e);
+    return failure(
+      e instanceof ApiError
+        ? new ConsoleError(
+            e.status === 409 ? "roleConflict" : "roleUnavailable",
+            e.status,
+          )
+        : e,
+    );
   }
 }
 export async function POST(request: Request) {
@@ -28,13 +39,18 @@ export async function POST(request: Request) {
     checkMutation(request, s.csrf);
     if (process.env.ADMIN_ENABLE_OPERATOR !== "true")
       throw new ConsoleError("writesDisabled", 403);
-    const body = await boundedJSON(request),
+    const body = await boundedJSON(request, 1048576),
       key = request.headers.get("idempotency-key") ?? "";
     if (!/^[A-Za-z0-9_-]{16,128}$/.test(key))
       throw new ConsoleError("invalid", 400);
-    const result = operation.safeParse(body);
+    const { roleConfiguration: roleInput, ...metadata } = body;
+    const roleConfig =
+      roleInput === undefined ? undefined : roleConfiguration.parse(roleInput);
+    const result = operation.safeParse(metadata);
     if (!result.success) throw new ConsoleError("invalid", 400);
     const parsed = result.data;
+    if (roleConfig && parsed.kind !== "app")
+      throw new ConsoleError("invalid", 400);
     if (parsed.kind === "deployment") {
       const old = await pool.query(
         "SELECT reviewer FROM deployments WHERE id=$1",
@@ -45,6 +61,15 @@ export async function POST(request: Request) {
     }
     try {
       await apply(parsed, key, `oidc:${s.sub}`);
+      if (roleConfig && parsed.kind === "app")
+        await operatorAuth(
+          `/v1/operator/apps/${parsed.id}/roles`,
+          `oidc:${s.sub}`,
+          roleConfig,
+          createHash("sha256")
+            .update("roles:" + key)
+            .digest("hex"),
+        );
     } catch (e) {
       // Database/network failures remain 503; domain validation produces a localized conflict.
       const code = (e as { code?: string }).code;
@@ -65,6 +90,13 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {
-    return failure(e);
+    return failure(
+      e instanceof ApiError
+        ? new ConsoleError(
+            e.status === 409 ? "roleConflict" : "roleUnavailable",
+            e.status,
+          )
+        : e,
+    );
   }
 }
