@@ -1,10 +1,26 @@
 {{- if .Values.keycloak.enabled }}
+{{- if .Values.keycloak.localBootstrapAdmin.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.namePrefix }}-keycloak-local-admin
+type: kubernetes.io/basic-auth
+stringData:
+  username: {{ .Values.keycloak.localBootstrapAdmin.username | quote }}
+  password: {{ .Values.keycloak.localBootstrapAdmin.password | quote }}
+---
+{{- end }}
 apiVersion: k8s.keycloak.org/v2beta1
 kind: Keycloak
 metadata:
   name: {{ .Values.namePrefix }}-keycloak
 spec:
   instances: 1
+  {{- if .Values.keycloak.localBootstrapAdmin.enabled }}
+  bootstrapAdmin:
+    user:
+      secret: {{ .Values.namePrefix }}-keycloak-local-admin
+  {{- end }}
   image: {{ .Values.keycloak.image | quote }}
   startOptimized: false
   hostname:

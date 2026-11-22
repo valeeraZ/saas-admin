@@ -79,6 +79,8 @@ kubectl --context CONTEXT -n saas-stage wait keycloakrealmimport/saas-platform-r
 
 Realm 不包含演示人类账号，不开放 password grant。Portal/控制台使用 code+PKCE；Auth introspection 与会话撤销 worker 使用各自的凭据。worker 的 `manage-users` 服务角色仅供服务器撤销上游会话，不进入 Portal/浏览器。
 
+仅在本地全新安装时，可以给基础设施 Chart 加上 `--set keycloak.localBootstrapAdmin.enabled=true`。Keycloak 首次启动会在 `master` realm 创建临时账号 `local-admin`，初始密码为 `local-keycloak-admin`。该选项默认关闭。
+
 Keycloak 初次管理员凭据由 Operator 的 Secret 提供，通过受限运维渠道使用。在 realm 中创建真实管理员账号，获取其稳定 `sub`，更新 `saas-console` Secret 的 `ADMIN_UI_ALLOWED_SUBJECTS`（逗号分隔）。生成器默认留空，控制台拒绝未配置的身份。平台管理员应设置 MFA，并验证恢复流程。
 
 RealmImport **只创建，不更新已有 realm**。更新 SMTP、回调、客户端凭据或身份策略应通过受控 Keycloak 管理流程同步；不能只修改 Kubernetes Secret 后假设已有 Keycloak 客户端自动更新。导入完成后删除该 RealmImport CR 以清理临时 Job；不要删除 Keycloak CR、CRD 或数据库。
