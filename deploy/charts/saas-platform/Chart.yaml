@@ -1,6 +1,6 @@
 apiVersion: v2
 name: saas-platform
-description: Single-cluster SaaS application services (infrastructure is a separate release)
+description: SaaS Admin and Portal services
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "0.2.0"

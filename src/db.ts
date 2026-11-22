@@ -1,57 +1,9 @@
 import { Pool } from "pg";
-import { readFileSync } from "node:fs";
+import { poolOptions } from "./config.ts";
 import { createHash } from "node:crypto";
 import { applyRuntime } from "./runtime.ts";
 import { operation } from "./contracts.ts";
-export const pool = new Pool({
-  connectionString: process.env.ADMIN_DATABASE_URL,
-  max: 10,
-  connectionTimeoutMillis: 3000,
-  statement_timeout: 5000,
-});
-export async function migrate() {
-  const c = await pool.connect();
-  try {
-    await c.query("BEGIN");
-    await c.query("SELECT pg_advisory_xact_lock(724193811)");
-    await c.query(
-      "CREATE TABLE IF NOT EXISTS admin_schema_migrations(name text PRIMARY KEY,sha256 text NOT NULL)",
-    );
-    for (const file of [
-      "001_catalog.sql",
-      "002_routing.sql",
-      "003_runtime_registry.sql",
-      "004_console_sessions.sql",
-      "005_app_publications.sql",
-    ]) {
-      const sql = readFileSync(
-          new URL("../migrations/" + file, import.meta.url),
-          "utf8",
-        ),
-        hash = createHash("sha256").update(sql).digest("hex");
-      const old = await c.query(
-        "SELECT sha256 FROM admin_schema_migrations WHERE name=$1",
-        [file],
-      );
-      if (old.rowCount) {
-        if (old.rows[0].sha256 !== hash)
-          throw Error("Applied migration checksum mismatch: " + file);
-        continue;
-      }
-      await c.query(sql);
-      await c.query(
-        "INSERT INTO admin_schema_migrations(name,sha256) VALUES($1,$2)",
-        [file, hash],
-      );
-    }
-    await c.query("COMMIT");
-  } catch (e) {
-    await c.query("ROLLBACK");
-    throw e;
-  } finally {
-    c.release();
-  }
-}
+export const pool = new Pool(poolOptions());
 export async function apply(input: unknown, key: string, actor: string) {
   const body = operation.parse(input);
   if (

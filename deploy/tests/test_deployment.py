@@ -70,6 +70,32 @@ class DeploymentTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.temp.cleanup()
 
+    def test_platform_ignores_legacy_auth_values(self):
+        self.assertFalse((self.directory / "auth-values.json").exists())
+        self.assertEqual(set(self.values["workloads"]), {"admin-api", "console", "portal"})
+        rendered = subprocess.check_output(
+            [
+                "helm", "template", "saas", str(ROOT / "deploy/charts/saas-platform"),
+                "-n", "saas-test", "-f", str(self.values_file),
+                "--set-string", "workloads.auth.image=legacy,workloads.worker.image=legacy",
+                "--set-string", "migrations.auth.workload=auth",
+            ],
+            text=True,
+        )
+        self.assertEqual(list(yaml.safe_load_all(rendered)), self.resources)
+
+    def test_preflight_checks_platform_images_before_cluster_access(self):
+        result = subprocess.run(
+            [
+                sys.executable, str(ROOT / "deploy/scripts/preflight.py"),
+                "--context", "unused", "--namespace", "saas-test",
+                "--values", str(self.directory / "platform-values.json"),
+            ],
+            capture_output=True, check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"Missing immutable image digest: admin-api", result.stderr)
+
     def test_credentials_are_separated_by_process(self):
         for name in [
             "saas-portal",
@@ -89,6 +115,11 @@ class DeploymentTests(unittest.TestCase):
             self.secrets["saas-auth"]["SAAS_APP_OPERATOR_KEY"],
             self.secrets["saas-console"]["ADMIN_AUTH_OPERATOR_KEY"],
         )
+        for name in ["saas-auth", "saas-worker"]:
+            self.assertEqual(
+                self.secrets[name]["SAAS_OIDC_ISSUER"],
+                "https://id.example.com/realms/platform",
+            )
         self.assertNotEqual(
             self.secrets["saas-admin-api"]["ADMIN_DATABASE_URL"],
             self.secrets["saas-console"]["ADMIN_DATABASE_URL"],
@@ -132,12 +163,12 @@ class DeploymentTests(unittest.TestCase):
             ).value.get_values_for_type(x509.DNSName),
         )
         self.assertEqual(
-            len([r for r in self.resources if r["kind"] == "NetworkPolicy"]), 2
+            len([r for r in self.resources if r["kind"] == "NetworkPolicy"]), 1
         )
 
     def test_migrations_finish_before_application_rollout(self):
         jobs = [r for r in self.resources if r["kind"] == "Job"]
-        self.assertEqual(len(jobs), 3)
+        self.assertEqual(len(jobs), 2)
         for job in jobs:
             self.assertEqual(
                 job["metadata"]["annotations"]["helm.sh/hook"],
@@ -158,10 +189,9 @@ class DeploymentTests(unittest.TestCase):
                 )
                 self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
             app = pod["containers"][0]
-            if resource["metadata"]["name"] != "saas-worker":
-                self.assertIn("startupProbe", app)
-                self.assertIn("readinessProbe", app)
-                self.assertIn("livenessProbe", app)
+            self.assertIn("startupProbe", app)
+            self.assertIn("readinessProbe", app)
+            self.assertIn("livenessProbe", app)
 
     def test_unpinned_image_is_rejected(self):
         invalid = {

@@ -25,7 +25,7 @@ export default async function Page({
   }
   const initial = await readConsole({ resource });
   return (
-    <Shell name={s.name} csrf={s.csrf} resource={resource}>
+    <Shell name={s.name} csrf={s.csrf} resource={resource as Resource}>
       <Workspace
         resource={resource as Resource}
         csrf={s.csrf}

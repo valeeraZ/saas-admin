@@ -15,9 +15,10 @@ def main():
     p.add_argument("--values", type=Path, required=True)
     args = p.parse_args()
     values = json.loads(args.values.read_text())
-    for name in ["auth", "worker", "admin-api", "console", "portal"]:
+    workloads = values["workloads"]
+    for name in ["admin-api", "console", "portal"]:
         if not re.fullmatch(
-            r".+@sha256:[a-f0-9]{64}", values["workloads"][name]["image"]
+            r".+@sha256:[a-f0-9]{64}", workloads[name]["image"]
         ):
             raise SystemExit(f"Missing immutable image digest: {name}")
     base = [
@@ -38,18 +39,6 @@ def main():
     for crd in ["keycloaks.k8s.keycloak.org", "keycloakrealmimports.k8s.keycloak.org"]:
         get("get", "crd", crd)
     required = {
-        "saas-auth": [
-            "SAAS_DATABASE_URL",
-            "SAAS_CURSOR_SECRET",
-            "SAAS_TASK_KEY",
-            "SAAS_INTROSPECTION_SECRET",
-            "SAAS_APP_OPERATOR_KEY",
-        ],
-        "saas-worker": [
-            "SAAS_DATABASE_URL",
-            "SAAS_TASK_KEY",
-            "SAAS_SESSION_WORKER_SECRET",
-        ],
         "saas-console": [
             "ADMIN_DATABASE_URL",
             "ADMIN_AUTH_OPERATOR_KEY",
@@ -64,11 +53,9 @@ def main():
             "PORTAL_ADMIN_KEY",
         ],
         "saas-admin-api": ["ADMIN_DATABASE_URL", "ADMIN_PORTAL_KEY"],
-        "saas-auth-migrate": ["SAAS_DATABASE_URL"],
         "saas-admin-migrate": ["ADMIN_DATABASE_URL"],
         "saas-portal-migrate": ["PORTAL_DATABASE_URL"],
         "saas-console-prune": ["ADMIN_DATABASE_URL"],
-        "saas-auth-tls": ["tls.crt", "tls.key"],
         "saas-admin-api-tls": ["tls.crt", "tls.key"],
         "saas-trust": ["ca.crt", "ca-bundle.crt"],
         "saas-portal-signing": ["private.pem"],

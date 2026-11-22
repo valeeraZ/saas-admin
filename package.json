@@ -17,6 +17,9 @@
     "format:check": "prettier --check src tests scripts integration/catalog.test.ts"
   },
   "dependencies": {
+    "@fastify/postgres": "6.1.2",
+    "fastify": "5.12.8",
+    "node-pg-migrate": "9.0.0",
     "pg": "8.23.0",
     "zod": "4.3.6"
   },

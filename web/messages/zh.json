@@ -1,6 +1,15 @@
 {
   "Console": {
     "brand": "SaaS Admin",
+    "console": "管理控制台",
+    "governance": "治理",
+    "accountMenu": "{name}的账号菜单",
+    "breadcrumb": "面包屑导航",
+    "navigate": "跳转到页面",
+    "navigateDescription": "搜索并打开控制台页面。",
+    "skipToContent": "跳到主内容",
+    "theme": "外观",
+    "themes": { "light": "浅色", "dark": "深色", "system": "跟随系统" },
     "workspace": "工作空间",
     "applications": "应用",
     "deployments": "部署",

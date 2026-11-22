@@ -1,4 +1,4 @@
-{{- range $name, $w := .Values.workloads }}
+{{- range $name, $w := pick .Values.workloads "admin-api" "console" "portal" }}
 {{- $full := printf "%s-%s" $.Values.namePrefix $name }}
 ---
 apiVersion: apps/v1

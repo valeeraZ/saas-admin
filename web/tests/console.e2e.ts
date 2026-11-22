@@ -50,6 +50,46 @@ try {
   await page
     .getByRole("heading", { name: "Applications", exact: true })
     .waitFor();
+  await page.keyboard.press("Control+k");
+  const navigationDialog = page.getByRole("dialog", { name: "Go to page" });
+  await navigationDialog.getByRole("combobox").fill("audit");
+  await navigationDialog.getByRole("option", { name: "Audit log" }).click();
+  await page.getByRole("heading", { name: "Audit log", exact: true }).waitFor();
+  await page
+    .getByRole("link", { name: "Access requests", exact: true })
+    .click();
+  await page
+    .getByRole("heading", { name: "Access requests", exact: true })
+    .waitFor();
+  await page.getByRole("combobox", { name: "Status", exact: true }).click();
+  const filteredRequests = page.waitForResponse(
+    (response) => response.url() === origin + "/api/requests?status=all",
+  );
+  await page.getByRole("option", { name: "All requests", exact: true }).click();
+  assert.equal((await filteredRequests).status(), 200);
+  await page.getByText("No access requests match this status.").waitFor();
+  await page.getByRole("link", { name: "Applications", exact: true }).click();
+
+  await page.getByRole("button", { name: "Navigation", exact: true }).click();
+  const sidebar = page.locator('[data-slot="sidebar"][data-state]');
+  assert.equal(await sidebar.getAttribute("data-state"), "collapsed");
+  await page.reload();
+  assert.equal(await sidebar.getAttribute("data-state"), "collapsed");
+  await page.getByRole("button", { name: "Navigation", exact: true }).click();
+
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Dark", exact: true }).click();
+  await page.locator("html.dark").waitFor();
+  await page.reload();
+  await page.locator("html.dark").waitFor();
+  await page.screenshot({
+    path: join(work, "applications-dark.png"),
+    animations: "disabled",
+  });
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Light", exact: true }).click();
+  await page.locator("html.light").waitFor();
+  console.log("PASS navigation search, persisted sidebar and appearance");
   const cookie = (await context.cookies()).find(
     (c) => c.name === "admin-console-session",
   )!;
@@ -426,6 +466,14 @@ try {
     fullPage: true,
     animations: "disabled",
   });
+  const mobileTable = page.getByRole("region", { name: "应用", exact: true });
+  await mobileTable.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll('[data-slot="table-container"]')).some(
+      (table) => table.scrollLeft > 0,
+    ),
+  );
   await page.getByRole("button", { name: "导航", exact: true }).click();
   await page.getByRole("link", { name: "部署", exact: true }).click();
   await page.getByRole("heading", { name: "部署", exact: true }).waitFor();
@@ -470,12 +518,15 @@ try {
     ).status(),
     200,
   );
-  const logout = await context.request.post(
-    origin + "/api/auth/logout?locale=zh",
-    { headers: { origin, "x-csrf-token": session.csrf } },
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("button", { name: /账号菜单/ }).click();
+  const logoutResponse = page.waitForResponse(
+    (response) =>
+      response.url() === origin + "/api/auth/logout?locale=zh" &&
+      response.request().method() === "POST",
   );
-  assert.equal(logout.status(), 200);
-  await page.goto((await logout.json()).location);
+  await page.getByRole("menuitem", { name: "退出登录", exact: true }).click();
+  assert.equal((await logoutResponse).status(), 200);
   await page.waitForURL(origin + "/zh/login");
   await remove(cookie.value);
   assert.equal(

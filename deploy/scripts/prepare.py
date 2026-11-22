@@ -202,13 +202,18 @@ def main():
     ]
     operator_key, catalog_key = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     session_key = lambda: base64.b64encode(secrets.token_bytes(32)).decode()
+    issuer = "https://" + args.identity_host + "/realms/platform"
     auth_common = {
+        "SAAS_OIDC_ISSUER": issuer,
+        "SAAS_USER_CLIENTS": "saas-portal",
+        "SAAS_INTROSPECTION_CLIENT": "saas-auth",
+        "SAAS_SESSION_WORKER_CLIENT": "saas-session-worker",
         "SAAS_DATABASE_URL": db("saas_auth", "saas_auth"),
         "SAAS_CURSOR_SECRET": secrets.token_urlsafe(32),
         "SAAS_INTROSPECTION_SECRET": auth_secret,
         "SAAS_TASK_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
     }
-    secret("saas-auth", {**auth_common, "SAAS_APP_OPERATOR_KEY": operator_key})
+    secret("saas-auth", {**auth_common, "SAAS_SESSION_WORKER_SECRET": worker_secret, "SAAS_APP_OPERATOR_KEY": operator_key})
     secret("saas-worker", {**auth_common, "SAAS_SESSION_WORKER_SECRET": worker_secret})
     secret("saas-auth-migrate", {"SAAS_DATABASE_URL": db("saas_auth", "saas_auth")})
     secret(
@@ -299,7 +304,6 @@ def main():
         "https://" + args.portal_host,
         "https://" + args.console_host,
     )
-    issuer = "https://" + args.identity_host + "/realms/platform"
     realm = {
         "realm": "platform",
         "enabled": True,
@@ -377,21 +381,11 @@ def main():
             },
         },
     )
-    auth_env = {
-        "SAAS_OIDC_ISSUER": issuer,
-        "SAAS_USER_CLIENTS": "saas-portal",
-        "SAAS_INTROSPECTION_CLIENT": "saas-auth",
-    }
     auth_url = f"https://saas-auth.{args.namespace}.svc.cluster.local"
     admin_url = f"https://saas-admin-api.{args.namespace}.svc.cluster.local"
     workloads = {
         name: {"image": ""}
-        for name in ["auth", "worker", "admin-api", "console", "portal"]
-    }
-    workloads["auth"]["env"] = auth_env
-    workloads["worker"]["env"] = {
-        **auth_env,
-        "SAAS_SESSION_WORKER_CLIENT": "saas-session-worker",
+        for name in ["admin-api", "console", "portal"]
     }
     workloads["admin-api"]["env"] = {"ADMIN_AUTH_URL": auth_url}
     workloads["console"]["env"] = {

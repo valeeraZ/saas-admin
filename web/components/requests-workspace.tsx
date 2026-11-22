@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { useTranslations, useFormatter } from "next-intl";
 import type { ReviewRequest } from "../../src/access-requests.ts";
+import { WorkspaceHeading } from "@/components/workspace-heading";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -124,10 +125,10 @@ export function RequestsWorkspace({
   }
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold">{t("requests")}</h1>
-        <p className="text-muted-foreground">{t("requestsDescription")}</p>
-      </div>
+      <WorkspaceHeading
+        title={t("requests")}
+        description={t("requestsDescription")}
+      />
       <div className="flex flex-wrap items-center gap-3">
         <Select
           value={status}
@@ -159,109 +160,119 @@ export function RequestsWorkspace({
           <AlertDescription>{t("errors." + error)}</AlertDescription>
         </Alert>
       ) : null}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {[
-              "user",
-              "application",
-              "roles",
-              "status",
-              "review",
-              "actions",
-            ].map((k) => (
-              <TableHead key={k}>{t(k)}</TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {page.items.map((r) => (
-            <TableRow key={r.id}>
-              <TableCell>
-                <div className="flex flex-col gap-1">
-                  <span>{r.displayName}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {r.email}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {fmt.dateTime(new Date(r.createdAt), {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </span>
-                </div>
-              </TableCell>
-              <TableCell>{r.appName}</TableCell>
-              <TableCell>{r.roles.join(", ")}</TableCell>
-              <TableCell>
-                <Badge variant="secondary">{t(r.status)}</Badge>
-              </TableCell>
-              <TableCell className="max-w-72 whitespace-normal">
-                <div className="flex min-w-40 max-w-72 flex-col gap-1">
-                  <span className="break-all text-xs text-muted-foreground">
-                    {r.reviewer}
-                  </span>
-                  {r.reviewedAt ? (
+      <div
+        className="min-w-0 overflow-hidden rounded-lg border"
+        aria-busy={busy}
+      >
+        <Table scrollLabel={t("requests")}>
+          <TableHeader className="bg-muted/40">
+            <TableRow>
+              {[
+                "user",
+                "application",
+                "roles",
+                "status",
+                "review",
+                "actions",
+              ].map((k) => (
+                <TableHead key={k}>{t(k)}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {page.items.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    <span>{r.displayName}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {r.email}
+                    </span>
                     <span className="text-xs text-muted-foreground">
-                      {fmt.dateTime(new Date(r.reviewedAt), {
+                      {fmt.dateTime(new Date(r.createdAt), {
                         dateStyle: "medium",
                         timeStyle: "short",
                       })}
                     </span>
-                  ) : null}
-                  <span className="whitespace-pre-wrap break-words">
-                    {r.comment}
-                  </span>
-                </div>
-              </TableCell>
-              <TableCell>
-                {r.status === "pending" ? (
-                  <div className="flex flex-wrap gap-2">
-                    {(["approved", "rejected"] as const).map((decision) => (
-                      <Button
-                        key={decision}
-                        variant={
-                          decision === "rejected" ? "outline" : "default"
-                        }
-                        disabled={busy}
-                        onClick={() => {
-                          setSelected({ request: r, decision });
-                          setComment("");
-                          setError("");
-                          operation.current = null;
-                        }}
-                      >
-                        {t(
-                          decision === "approved"
-                            ? "approveRequest"
-                            : "rejectRequest",
-                        )}
-                      </Button>
-                    ))}
                   </div>
-                ) : null}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {!page.items.length ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>{t("empty")}</EmptyTitle>
-            <EmptyDescription>{t("requestsEmpty")}</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : null}
-      {page.nextCursor ? (
-        <Button
-          variant="outline"
-          disabled={busy}
-          onClick={() => load(status, true)}
-        >
-          {t("loadMore")}
-        </Button>
-      ) : null}
+                </TableCell>
+                <TableCell>{r.appName}</TableCell>
+                <TableCell>{r.roles.join(", ")}</TableCell>
+                <TableCell>
+                  <Badge variant="secondary">{t(r.status)}</Badge>
+                </TableCell>
+                <TableCell className="max-w-72 whitespace-normal">
+                  <div className="flex min-w-40 max-w-72 flex-col gap-1">
+                    <span className="break-all text-xs text-muted-foreground">
+                      {r.reviewer}
+                    </span>
+                    {r.reviewedAt ? (
+                      <span className="text-xs text-muted-foreground">
+                        {fmt.dateTime(new Date(r.reviewedAt), {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    ) : null}
+                    <span className="whitespace-pre-wrap break-words">
+                      {r.comment}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {r.status === "pending" ? (
+                    <div className="flex flex-wrap gap-2">
+                      {(["approved", "rejected"] as const).map((decision) => (
+                        <Button
+                          key={decision}
+                          variant={
+                            decision === "rejected" ? "outline" : "default"
+                          }
+                          disabled={busy}
+                          onClick={() => {
+                            setSelected({ request: r, decision });
+                            setComment("");
+                            setError("");
+                            operation.current = null;
+                          }}
+                        >
+                          {t(
+                            decision === "approved"
+                              ? "approveRequest"
+                              : "rejectRequest",
+                          )}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {!page.items.length && !error ? (
+          <Empty className="border-0">
+            <EmptyHeader>
+              <EmptyTitle>{t("empty")}</EmptyTitle>
+              <EmptyDescription>{t("requestsEmpty")}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {t("showing", { count: fmt.number(page.items.length) })}
+        </p>
+        {page.nextCursor ? (
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => load(status, true)}
+          >
+            {t("loadMore")}
+          </Button>
+        ) : null}
+      </div>
       <Dialog
         open={!!selected}
         onOpenChange={(open) => {

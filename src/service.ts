@@ -1,4 +1,4 @@
-import { pool } from "./db.ts";
+import type { Pool } from "pg";
 import { settings } from "./config.ts";
 import {
   context,
@@ -16,15 +16,12 @@ export class ApiError extends Error {
     this.status = status;
   }
 }
-async function auth(path: string, bearer: string, body?: unknown) {
+async function auth(path: string, bearer: string) {
   const r = await fetch(settings().auth + path, {
-    method: body ? "POST" : "GET",
     headers: {
       authorization: bearer,
       accept: "application/json",
-      ...(body ? { "content-type": "application/json" } : {}),
     },
-    body: body ? JSON.stringify(body) : undefined,
     redirect: "error",
     signal: AbortSignal.timeout(5000),
   });
@@ -51,7 +48,7 @@ async function auth(path: string, bearer: string, body?: unknown) {
   }
   return JSON.parse(Buffer.concat(chunks).toString());
 }
-export async function list(bearer: string, after: string) {
+export async function list(pool: Pool, bearer: string, after: string) {
   const ctx = context.parse(await auth("/v1/me", bearer));
   const rows = (
     await pool.query(
@@ -93,6 +90,7 @@ export async function list(bearer: string, after: string) {
 }
 
 export async function resolve(
+  pool: Pool,
   bearer: string,
   mount: string,
   runtimeOnly = false,
@@ -126,7 +124,7 @@ export async function resolve(
 }
 
 // Public build files are application-independent; this service API is still Portal-only.
-export async function resolveAsset(mount: string, version: string) {
+export async function resolveAsset(pool: Pool, mount: string, version: string) {
   const row = (
     await pool.query(
       `SELECT a.id AS "appId",d.id AS "deploymentId",a.suffix,
@@ -149,7 +147,7 @@ export async function resolveAsset(mount: string, version: string) {
 }
 
 /** Public-facing discovery metadata; route origins stay private. */
-export async function discover(bearer: string, after: string) {
+export async function discover(pool: Pool, bearer: string, after: string) {
   context.parse(await auth("/v1/me", bearer));
   const rows = (
     await pool.query(

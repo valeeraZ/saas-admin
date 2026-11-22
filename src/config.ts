@@ -21,3 +21,12 @@ export function settings() {
     throw Error("ADMIN_DATABASE_URL required");
   return { auth: auth.origin, key };
 }
+
+export function poolOptions() {
+  return {
+    connectionString: process.env.ADMIN_DATABASE_URL,
+    max: 10,
+    connectionTimeoutMillis: 3000,
+    statement_timeout: 5000,
+  };
+}

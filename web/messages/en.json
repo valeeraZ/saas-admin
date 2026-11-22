@@ -1,6 +1,15 @@
 {
   "Console": {
     "brand": "SaaS Admin",
+    "console": "Management console",
+    "governance": "Governance",
+    "accountMenu": "Account menu for {name}",
+    "breadcrumb": "Breadcrumb",
+    "navigate": "Go to page",
+    "navigateDescription": "Search and open a console page.",
+    "skipToContent": "Skip to content",
+    "theme": "Appearance",
+    "themes": { "light": "Light", "dark": "Dark", "system": "System" },
     "workspace": "Workspace",
     "applications": "Applications",
     "deployments": "Deployments",

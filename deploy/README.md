@@ -1,6 +1,6 @@
 # 单集群 Kubernetes 部署
 
-范围是一个 Kubernetes 集群、一个命名空间、每个应用进程一个副本。SDK 是构建依赖，不是在线服务。`saas-infrastructure` 管 PostgreSQL 和 Operator 托管的 Keycloak；`saas-platform` 管 Auth、撤销任务 worker、Admin 私有 API、Admin 控制台、Portal、迁移 Job 和会话清理 CronJob。两个 release 分开升级，应用回滚不删除数据库。
+范围是一个 Kubernetes 集群、一个命名空间、每个应用进程一个副本。SDK 是构建依赖。`saas-infrastructure` 管 PostgreSQL 和 Operator 托管的 Keycloak；`saas-platform` 管 Admin 私有 API、Admin 控制台、Portal 及其迁移 Job 和会话清理 CronJob。平台依赖单独部署的 Auth 服务。
 
 目标集群、域名、镜像仓库和数据库位置尚待提供。下列 `example.com` 和 context 均是占位配置，不能直接作为生产部署凭据。当前执行记录见 [VALIDATION.md](VALIDATION.md)。
 
@@ -9,18 +9,16 @@
 - Kubernetes 1.27+、Helm 3.16+、Ingress controller 和支持 ReadWriteOnce 的 StorageClass（使用内置数据库时）。
 - 对应命名空间有 Keycloak **26.7.3** Operator 及其 `v2beta1` CRD；由集群管理员安装，固定版本，不启用自动升级。Chart 不偷偷安装集群级 CRD/RBAC。按照 [官方安装流程](https://www.keycloak.org/operator/installation)，版本选 `26.7.3` 而非网页展示的最新版。
 - 三个公开 HTTPS 域名：Portal、Admin 控制台、Keycloak；它们可从浏览器和集群内 Pod 访问。公开证书 Secret `saas-public-tls` 的 SAN 覆盖三个域名；也可以改三个 Chart 字段使用各自证书。生产证书可由 cert-manager 或现有证书流程维护。
-- 容器仓库以及四个不可变镜像：Auth、Admin API、Admin 控制台、Portal；构建架构与节点一致。镜像拉取凭据通过 `imagePullSecrets` 配置，不写入 values。
+- 容器仓库以及 Admin API、Admin 控制台和 Portal 的不可变镜像，构建架构与节点一致。镜像拉取凭据通过 `imagePullSecrets` 配置。
 - SMTP STARTTLS 服务及发件人，用于找回密码。新生成的 realm 允许用户注册后直接登录，邮箱状态仍为未验证。
 
 Keycloak 使用 PostgreSQL 持久化，Operator 本身不管理数据库，见[官方部署说明](https://www.keycloak.org/operator/basic-deployment)。集群内数据库是单实例，有重启恢复能力，没有数据库高可用保证。外部数据库由目标环境独立维护。
 
 ## 1. 构建镜像
 
-在四个仓库对应目录执行，不需要构建期业务凭据：
+在对应仓库目录执行，无需构建期业务凭据。
 
 ```sh
-# saas-auth
-docker build -t REGISTRY/saas-auth:COMMIT .
 # saas-admin
 docker build -t REGISTRY/saas-admin:COMMIT .
 docker build -f web/Dockerfile -t REGISTRY/saas-console:COMMIT .
@@ -28,7 +26,7 @@ docker build -f web/Dockerfile -t REGISTRY/saas-console:COMMIT .
 docker build -t REGISTRY/saas-portal:COMMIT .
 ```
 
-推送由目标仓库授权与凭据决定。推送后读取 registry 返回的 digest，把值写成 `REGISTRY/name@sha256:...`。Chart 拒绝 `latest`、浮动 tag 和未填写的镜像。`auth` 和 `worker` 使用相同的 Auth digest。
+推送由目标仓库授权与凭据决定。推送后读取 registry 返回的 digest，把值写成 `REGISTRY/name@sha256:...`。Chart 拒绝 `latest`、浮动 tag 和未填写的镜像。
 
 Portal 镜像必须通过 `node server.ts` 启动，不能替换成 `next start`，否则会绕过应用响应保护入口。控制台镜像的构建上下文是 Admin 仓库根目录，包含 `web` 对根目录 `src` 的依赖。
 
@@ -53,7 +51,7 @@ Portal 镜像必须通过 `node server.ts` 启动，不能替换成 `next start`
 
 生成器输出私有目录（0700），文件 0600，拒绝覆盖已有目录。它不会创建 K8s 资源。`secrets.json` 含稳定的会话加密密钥、数据库凭据、服务凭据和签名私钥；不要提交 Git、打印、上传日志或反复生成覆盖。离线加密保存此目录，数据库恢复时还需要相同的会话/任务密钥。
 
-编辑 `platform-values.json` 填写四个镜像 digest。编辑 `secrets.json` 中 `saas-oidc-clients` 的 `SMTP_USER`/`SMTP_PASSWORD`。不要在 values 存业务密钥。若 SMTP 不需要认证，明确修改 realm 中的 `smtpServer.auth` 后再导入。
+编辑 `platform-values.json` 填写 Admin API、控制台和 Portal 的镜像 digest。编辑 `secrets.json` 中 `saas-oidc-clients` 的 `SMTP_USER`/`SMTP_PASSWORD`。不要在 values 存业务密钥。若 SMTP 不需要认证，明确修改 realm 中的 `smtpServer.auth` 后再导入。
 
 内部 API 使用 TLS sidecar 和仅集群内可达的 ClusterIP；证书 SAN 为 `saas-auth.NAMESPACE.svc.cluster.local` 和 `saas-admin-api.NAMESPACE.svc.cluster.local`。默认集群 DNS 后缀必须为 `cluster.local`，其他后缀需同步修改生成器/Chart URL 和证书。生成内部 CA 有效期 365 天，服务证书 90 天；上线后应接入证书维护流程，在到期前更新 Secret 并滚动重启 TLS sidecar。Node 使用附加 CA，Python CA bundle 同时保留公共根证书。
 
@@ -87,6 +85,8 @@ RealmImport **只创建，不更新已有 realm**。更新 SMTP、回调、客�
 
 ## 4. 检查并部署应用
 
+先确认同一命名空间内的 Auth 服务已就绪。已有 `saas` release 如果包含 Auth 资源，先完成 Helm 归属迁移再升级平台。
+
 ```sh
 python3 deploy/scripts/preflight.py --context CONTEXT --namespace saas-stage \
   --values /secure/path/saas-stage/platform-values.json
@@ -97,7 +97,7 @@ helm upgrade --install saas deploy/charts/saas-platform \
 helm test saas --kube-context CONTEXT --namespace saas-stage --logs
 ```
 
-Auth、Admin、Portal 的迁移作为 `pre-install,pre-upgrade` Job 完成后才滚动应用。Secrets 和数据库在基础设施阶段已经存在，因此不依赖本次应用 release 的普通资源创建时序。失败的迁移阻止新应用上线；不要用 `--no-hooks` 跳过。Job 日志保留到下一次执行或 24 小时 TTL。
+Admin 和 Portal 的迁移作为 `pre-install,pre-upgrade` Job 完成后才滚动应用。Secrets 和数据库在基础设施阶段已经存在，因此不依赖本次应用 release 的普通资源创建时序。失败的迁移阻止新应用上线；不要用 `--no-hooks` 跳过。Job 日志保留到下一次执行或 24 小时 TTL。
 
 Admin 迁移账号独立于只读 API 和控制台账号；迁移后执行 `scripts/database-grants.ts`，API 无法读取控制台会话，控制台无建表权限。Auth/Portal 当前各自使用独立数据库 owner；进一步拆分 Auth/Portal schema owner 与运行账号属于权限收紧工作，当前不宣称完成。
 
@@ -107,7 +107,7 @@ Admin 迁移账号独立于只读 API 和控制台账号；迁移后执行 `scri
 
 ## 5. 集群验收
 
-- 所有 Deployment、PostgreSQL（如启用）及 Keycloak Ready；`helm test` 的四个服务健康检查通过，内部 TLS 验证通过。
+- 所有 Deployment、PostgreSQL（如启用）及 Keycloak Ready；`helm test` 的三个平台服务健康检查通过，内部 TLS 验证通过。
 - 浏览器真实登录、免邮件验证注册、找回、退出；管理员 OIDC、MFA 和恢复路径验证。
 - 发布两个审核应用；无授权时接口拒绝；申请多角色、批准/拒绝、意见回显、导航刷新、实际应用访问和撤权拒绝全部重跑。
 - 验证应用 SSR/RSC、Server Actions、资源、主题、中英文和移动端。应用后端需部署真实 SDK 应用并验证签名，不能用健康检查代替业务验收。

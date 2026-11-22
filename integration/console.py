@@ -222,18 +222,22 @@ def main():
         run(["node", "src/cli.ts", "migrate"])
         import psycopg
         from psycopg import sql
-        from saas_auth.db import migrate,make_pool
-        from saas_auth.app_service import AppService
+        from saas_auth.db import Database
+        from saas_auth.db.migrations import migration_config
+        from alembic import command
+        from saas_auth.services.users import AppService
         from saas_auth.config import Settings
-        from saas_auth.security import Identity
+        from saas_auth.identity.security import Identity
         auth_db=f"postgresql://console:{database_password}@127.0.0.1:{ports['db']}/auth_test"
         with psycopg.connect(env['ADMIN_DATABASE_URL'],autocommit=True) as conn:
             conn.execute('CREATE DATABASE auth_test OWNER console')
-        migrate(auth_db)
+        migration = migration_config()
+        migration.attributes["database_url"] = auth_db
+        command.upgrade(migration, "head")
         settings=Settings(auth_db,identity+'/realms/saas-console-local','test-cursor-at-least-32-characters',task_key=Fernet.generate_key().decode())
-        auth_pool=make_pool(auth_db);auth_pool.open(wait=True)
-        user=AppService(auth_pool,settings).me(Identity(settings.issuer,'seed-user','fixture',frozenset(),True,'seed-session','member@example.test',True,'Example Member')).body['user']
-        auth_pool.close()
+        auth_database=Database(auth_db)
+        user=AppService(auth_database,settings).me(Identity(settings.issuer,'seed-user','fixture',frozenset(),True,'seed-session','member@example.test',True,'Example Member')).body['user']
+        auth_database.close()
         env['CONSOLE_TEST_USER_ID']=user['id']
         auth_env={**env,'SAAS_DATABASE_URL':auth_db,'SAAS_OIDC_ISSUER':settings.issuer,'SAAS_CURSOR_SECRET':settings.cursor_secret,'SAAS_TASK_KEY':settings.task_key,'SAAS_APP_OPERATOR_KEY':operator_key,'SSL_CERT_FILE':str(work/'tls.crt')}
         auth_server=subprocess.Popen([str(args.auth.resolve()/'.venv/bin/uvicorn'),'saas_auth.api:create_app','--factory','--host','127.0.0.1','--port',str(ports['auth']),'--no-access-log'],cwd=args.auth,env=auth_env,stdout=log,stderr=log,start_new_session=True)

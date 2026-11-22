@@ -1,4 +1,5 @@
 import "../globals.css";
+import { ThemeProvider } from "next-themes";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getMessages } from "next-intl/server";
 import { notFound } from "next/navigation";
@@ -13,10 +14,12 @@ export default async function Layout({
   const { locale } = await params;
   if (!hasLocale(routing.locales, locale)) notFound();
   return (
-    <html lang={locale}>
+    <html lang={locale} suppressHydrationWarning>
       <body>
         <NextIntlClientProvider locale={locale} messages={await getMessages()}>
-          {children}
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            {children}
+          </ThemeProvider>
         </NextIntlClientProvider>
       </body>
     </html>

@@ -12,7 +12,13 @@ import {
   Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { WorkspaceHeading } from "@/components/workspace-heading";
 import {
   Table,
   TableHeader,
@@ -36,7 +42,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {AccessDialog} from "./access-dialog";
+import { AccessDialog } from "./access-dialog";
 import { OperationDialog, type Edit } from "./operation-dialog";
 import type { Resource } from "../../src/console.ts";
 type Row = Record<string, unknown>;
@@ -60,7 +66,7 @@ export function Workspace({
     [notice, setNotice] = useState(false),
     [edit, setEdit] = useState<Edit | null>(null),
     [details, setDetails] = useState<Row | null>(null);
-  const [access,setAccess]=useState<Row|null>(null);
+  const [access, setAccess] = useState<Row | null>(null);
   const request = useRef<AbortController | null>(null);
   async function load(more = false, search = q) {
     request.current?.abort();
@@ -153,12 +159,12 @@ export function Workspace({
       <div className="hidden size-10 shrink-0 items-center justify-center rounded-lg bg-muted sm:flex">
         <Box className="size-5 text-muted-foreground" />
       </div>
-      <div className="flex flex-col gap-1">
-        <span className="font-medium">
+      <div className="flex max-w-36 flex-col gap-1 sm:max-w-80">
+        <span className="truncate font-medium">
           {text(r, "name") || text(r, "appName")}
         </span>
         {r.description ? (
-          <span className="max-w-80 truncate text-sm text-muted-foreground">
+          <span className="truncate text-sm text-muted-foreground">
             {text(r, "description")}
           </span>
         ) : null}
@@ -167,16 +173,20 @@ export function Workspace({
   );
   return (
     <>
-      {access?<AccessDialog appId={text(access,"id")} name={text(access,"name")} csrf={csrf} onClose={()=>setAccess(null)}/>:null}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-[32px] font-semibold tracking-tight">
-            {t(resource)}
-          </h1>
-          <p className="text-muted-foreground">{t(`${resource}Description`)}</p>
-        </div>
+      {access ? (
+        <AccessDialog
+          appId={text(access, "id")}
+          name={text(access, "name")}
+          csrf={csrf}
+          onClose={() => setAccess(null)}
+        />
+      ) : null}
+      <WorkspaceHeading
+        title={t(resource)}
+        description={t(`${resource}Description`)}
+      >
         {resource !== "audit" ? (
-          <Button size="lg" onClick={create}>
+          <Button onClick={create}>
             <Plus data-icon="inline-start" />
             {t(
               resource === "applications"
@@ -187,33 +197,36 @@ export function Workspace({
             )}
           </Button>
         ) : null}
-      </div>
-      <div className="flex items-center gap-3">
+      </WorkspaceHeading>
+      <div className="flex items-center gap-2">
         <form
-          className="flex max-w-md flex-1 items-center gap-2"
+          className="w-72 max-w-full min-w-0"
           onSubmit={(e) => {
             e.preventDefault();
             load(false);
           }}
         >
-          <Input
-            placeholder={t("search", { resource: t(resource) })}
-            aria-label={t("search", { resource: t(resource) })}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <Button
-            type="submit"
-            variant="outline"
-            size="icon"
-            disabled={busy}
-            aria-label={t("search", { resource: t(resource) })}
-          >
-            <Search />
-          </Button>
+          <InputGroup>
+            <InputGroupInput
+              placeholder={t("search", { resource: t(resource) })}
+              aria-label={t("search", { resource: t(resource) })}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                type="submit"
+                size="icon-xs"
+                disabled={busy}
+                aria-label={t("search", { resource: t(resource) })}
+              >
+                <Search />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
         </form>
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon"
           onClick={() => load()}
           disabled={busy}
@@ -232,9 +245,12 @@ export function Workspace({
           <AlertDescription>{t(`errors.${error}`)}</AlertDescription>
         </Alert>
       ) : null}
-      <div className="min-w-0" aria-busy={busy}>
-        <Table>
-          <TableHeader>
+      <div
+        className="min-w-0 overflow-hidden rounded-lg border"
+        aria-busy={busy}
+      >
+        <Table scrollLabel={t(resource)}>
+          <TableHeader className="bg-muted/40">
             <TableRow>
               {(resource === "applications"
                 ? ["application", "mount", "status", "deployments", "actions"]
@@ -266,7 +282,7 @@ export function Workspace({
               <TableRow key={text(r, "rowKey")}>
                 {resource === "applications" ? (
                   <>
-                    <TableCell className="py-5">{application(r)}</TableCell>
+                    <TableCell className="py-3">{application(r)}</TableCell>
                     <TableCell className="font-mono text-xs">
                       {text(r, "suffix")}
                     </TableCell>
@@ -297,7 +313,9 @@ export function Workspace({
                           <Pencil data-icon="inline-start" />
                           {t("edit")}
                         </Button>
-                        <Button variant="outline" onClick={()=>setAccess(r)}>{t("manageAccess")}</Button>
+                        <Button variant="outline" onClick={() => setAccess(r)}>
+                          {t("manageAccess")}
+                        </Button>
                         <Button variant="ghost" onClick={() => setDetails(r)}>
                           {t("details")}
                         </Button>
@@ -306,7 +324,7 @@ export function Workspace({
                   </>
                 ) : resource === "deployments" ? (
                   <>
-                    <TableCell className="py-5">{application(r)}</TableCell>
+                    <TableCell className="py-3">{application(r)}</TableCell>
                     <TableCell>
                       <button
                         className="max-w-44 truncate text-left font-mono text-xs underline-offset-4 hover:underline"
@@ -427,7 +445,7 @@ export function Workspace({
                   </>
                 ) : resource === "publications" ? (
                   <>
-                    <TableCell className="py-5">{application(r)}</TableCell>
+                    <TableCell className="py-3">{application(r)}</TableCell>
                     <TableCell className="font-mono text-xs">
                       {text(r, "deploymentId")}
                     </TableCell>
@@ -462,7 +480,7 @@ export function Workspace({
                   </>
                 ) : (
                   <>
-                    <TableCell className="py-5 whitespace-nowrap">
+                    <TableCell className="py-3 whitespace-nowrap">
                       {date(r.createdAt)}
                     </TableCell>
                     <TableCell
@@ -491,7 +509,7 @@ export function Workspace({
           </TableBody>
         </Table>
         {!data.items.length && !error ? (
-          <Empty>
+          <Empty className="border-0">
             <EmptyHeader>
               <EmptyTitle>{t("empty")}</EmptyTitle>
               <EmptyDescription>{t("emptyDescription")}</EmptyDescription>

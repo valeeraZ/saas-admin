@@ -31,7 +31,7 @@ Set the client secret only on the server. Generate `ADMIN_UI_SESSION_KEY` using 
 
 ## Database and security
 
-Apply migration 004 with a migration account before starting the console. Use a dedicated operator database role with SELECT/INSERT/UPDATE on `app_definitions`, `deployments`, `installations`, `deployment_routes`, `runtime_deployments` and SELECT/INSERT on `catalog_operations`. Grant SELECT/INSERT/UPDATE/DELETE on `admin_console_sessions`. The catalog API account must retain its narrower read permissions. `ADMIN_ENABLE_OPERATOR=true` explicitly enables console writes. Origin/DNS policy variables are the same as the CLI.
+Apply the schema migration with a migration account before starting the console. Use a dedicated operator database role with SELECT/INSERT/UPDATE on `app_definitions`, `deployments`, `app_publications`, `deployment_routes`, `runtime_deployments` and SELECT/INSERT on `catalog_operations`. Grant SELECT/INSERT/UPDATE/DELETE on `admin_console_sessions`. The catalog API account must retain its narrower read permissions. `ADMIN_ENABLE_OPERATOR=true` explicitly enables console writes. Origin/DNS policy variables are the same as the CLI.
 
 Cookies contain only random opaque session IDs. Session IDs are hashed in PostgreSQL; identity tokens and CSRF secrets are encrypted with AES-256-GCM. Sessions expire after eight hours and after thirty idle minutes. Refresh is serialized per session. Every read/write verifies the subject whitelist and performs online token introspection; identity outages deny access. Production cookies use the `__Host-` prefix, Secure, HttpOnly and SameSite=Lax. Login transactions are one-use, ten-minute PKCE/state/nonce records.
 

@@ -4,7 +4,7 @@ Implemented on `codex/runtime-application-registry`, based on Admin main `5219dc
 
 ## Operator workflow
 
-Run migration 003 with `npm run db:migrate` before deploying the new API. The operator CLI is the existing privileged control boundary; the HTTP service exposes read-only private endpoints, not public management writes. Set `ADMIN_ENABLE_OPERATOR=true`, a real `ADMIN_OPERATOR_ID`, and a migration/operator database identity. The API database identity requires SELECT only. Retain `catalog_operations` as the audit/idempotency ledger.
+Run the schema migration with `npm run db:migrate` before deploying the new API. The operator CLI is the existing privileged control boundary; the HTTP service exposes read-only private endpoints, not public management writes. Set `ADMIN_ENABLE_OPERATOR=true`, a real `ADMIN_OPERATOR_ID`, and a migration/operator database identity. The API database identity requires SELECT only. Retain `catalog_operations` as the audit/idempotency ledger.
 
 Every operation below is applied with `node src/cli.ts apply FILE IDEMPOTENCY_KEY`. Use a new random key for a new operation and reuse exactly the same key/body/actor when retrying an uncertain response. All changes and audit entries commit in one transaction. Operator writes serialize across replicas using a PostgreSQL transaction advisory lock; reads remain available. IDs and digest below are illustrative, not deployable artifacts.
 
@@ -39,12 +39,12 @@ Choose a real, short compatibility deadline appropriate to the release. Both dep
 {"kind":"deployment-status","deploymentId":"00000000-0000-4000-8000-000000000002","status":"revoked"}
 ```
 
-Revocation removes both business and public asset eligibility. Retired/revoked identities cannot return to ready; a fresh reviewed identity is required. Disabling the app removes all its versions. Disabling an installation removes that tenant's business access; immutable public files are intentionally not tenant-authorized content.
+Revocation removes both business and public asset eligibility. Retired/revoked identities cannot return to ready; a fresh reviewed identity is required. Disabling the app removes all its versions. Disabling a publication removes access to the app; immutable public files are intentionally not tenant-authorized content.
 
 ## Private read contracts
 
-- `GET /v1/tenants/{tenantId}/runtime-route?suffix=/reports`: Portal service key plus delegated Auth bearer. Returns current authorized tenant/user/roles plus app/deployment/mount/origin/runtime/version/status/digest/reviewer/review time. Admin rechecks the installation after the remote role lookup so a concurrent replacement/revocation cannot silently reuse the prior deployment.
-- `GET /v1/runtime/assets?suffix=/reports&version=release-20260920`: Portal service key only. Returns a reviewed ready Next.js deployment or an unexpired retired one. No Auth token is required because only immutable public JS/CSS/fonts are served. No tenant business path is admitted through this endpoint.
+- `GET /v1/runtime-route?suffix=/reports`: Portal service key plus delegated Auth bearer. Returns current authorized user and roles plus app/deployment/mount/origin/runtime/version/status/digest/reviewer/review time. Admin rechecks publication eligibility after the remote role lookup so a concurrent replacement/revocation cannot silently reuse the prior deployment.
+- `GET /v1/runtime/assets?suffix=/reports&version=release-20260920`: Portal service key only. Returns a reviewed ready Next.js deployment or an unexpired retired one. No Auth token is required because only immutable public JS/CSS/fonts are served. No business path is admitted through this endpoint.
 - `/catalog` and the legacy `/route` retain their shapes. Browser catalog responses still omit internal origins and deployment metadata. Portal Admin mode uses `/runtime-route`, never the legacy fallback.
 
 Generated contracts: `contracts/openapi.json` and `contracts/operator.schema.json` (`npm run contracts`). Unknown/ineligible records return 404, invalid requests 400, missing service credentials 401, upstream/database/schema failures 503. All responses are `Cache-Control: no-store`.
@@ -53,7 +53,7 @@ Generated contracts: `contracts/openapi.json` and `contracts/operator.schema.jso
 
 On operator processes set `ADMIN_APP_DNS_SUFFIXES=apps.internal.example` to allow only strict subdomains over HTTPS/default port 443. The suffix root, deceptive suffixes and arbitrary ports are excluded. `ADMIN_ALLOWED_APP_ORIGINS` supplies exact exceptions. HTTP is restricted to explicitly listed loopback origins and `ADMIN_ALLOW_LOCAL_HTTP=true`. Portal separately enforces `PORTAL_APP_DNS_SUFFIXES` and `PORTAL_APP_EGRESS_ORIGINS`. Network/DNS ownership and egress firewall policy must maintain this infrastructure boundary; a Registry record does not bypass it.
 
-Deploy Admin/migration first. Register fresh runtime identities for legacy applications, verify them, approve them and update installations. On Portal select `PORTAL_REGISTRY_MODE=admin` (the default), configure infrastructure policy, and remove `PORTAL_ALLOWED_APP_ORIGINS`, `PORTAL_NEXT_APP_ORIGINS` and `PORTAL_APP_ASSETS`. Admin mode rejects nonempty legacy projections, including `[]`, at startup and request time. Restart Portal once for this migration. Later onboarding/releases inside the approved network boundary need only Admin operations; no Portal rebuild/restart is required. Changing the infrastructure boundary itself still requires configuration rollout.
+Deploy Admin/migration first. Register fresh runtime identities for legacy applications, verify them, approve them and update publications. On Portal select `PORTAL_REGISTRY_MODE=admin` (the default), configure infrastructure policy, and remove `PORTAL_ALLOWED_APP_ORIGINS`, `PORTAL_NEXT_APP_ORIGINS` and `PORTAL_APP_ASSETS`. Admin mode rejects nonempty legacy projections, including `[]`, at startup and request time. Restart Portal once for this migration. Later onboarding/releases inside the approved network boundary need only Admin operations; no Portal rebuild/restart is required. Changing the infrastructure boundary itself still requires configuration rollout.
 
 `PORTAL_REGISTRY_MODE=environment` explicitly retains the old local/emergency behavior. It requires the old projections and restart on changes. It does not automatically activate during Registry failures. Keep the new read API additive so an operator can roll Portal back without reverting database history.
 
