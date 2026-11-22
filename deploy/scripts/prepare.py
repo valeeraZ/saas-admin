@@ -305,7 +305,7 @@ def main():
         "enabled": True,
         "sslRequired": "external",
         "registrationAllowed": True,
-        "verifyEmail": True,
+        "verifyEmail": False,
         "resetPasswordAllowed": True,
         "bruteForceProtected": True,
         "accessTokenLifespan": 300,

@@ -106,7 +106,8 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(
             all(not c["directAccessGrantsEnabled"] for c in realm["clients"])
         )
-        self.assertTrue(realm["verifyEmail"])
+        self.assertFalse(realm["verifyEmail"])
+        self.assertTrue(realm["resetPasswordAllowed"])
         self.assertEqual(
             realm["clients"][0]["redirectUris"],
             ["https://portal.example.com/api/auth/callback"],

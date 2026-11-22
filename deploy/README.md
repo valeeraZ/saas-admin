@@ -10,7 +10,7 @@
 - 对应命名空间有 Keycloak **26.7.3** Operator 及其 `v2beta1` CRD；由集群管理员安装，固定版本，不启用自动升级。Chart 不偷偷安装集群级 CRD/RBAC。按照 [官方安装流程](https://www.keycloak.org/operator/installation)，版本选 `26.7.3` 而非网页展示的最新版。
 - 三个公开 HTTPS 域名：Portal、Admin 控制台、Keycloak；它们可从浏览器和集群内 Pod 访问。公开证书 Secret `saas-public-tls` 的 SAN 覆盖三个域名；也可以改三个 Chart 字段使用各自证书。生产证书可由 cert-manager 或现有证书流程维护。
 - 容器仓库以及四个不可变镜像：Auth、Admin API、Admin 控制台、Portal；构建架构与节点一致。镜像拉取凭据通过 `imagePullSecrets` 配置，不写入 values。
-- SMTP STARTTLS 服务及发件人，用于注册验证和找回密码。
+- SMTP STARTTLS 服务及发件人，用于找回密码。新生成的 realm 允许用户注册后直接登录，邮箱状态仍为未验证。
 
 Keycloak 使用 PostgreSQL 持久化，Operator 本身不管理数据库，见[官方部署说明](https://www.keycloak.org/operator/basic-deployment)。集群内数据库是单实例，有重启恢复能力，没有数据库高可用保证。外部数据库由目标环境独立维护。
 
@@ -106,7 +106,7 @@ Admin 迁移账号独立于只读 API 和控制台账号；迁移后执行 `scri
 ## 5. 集群验收
 
 - 所有 Deployment、PostgreSQL（如启用）及 Keycloak Ready；`helm test` 的四个服务健康检查通过，内部 TLS 验证通过。
-- 浏览器真实登录、注册验证邮件、找回、退出；管理员 OIDC、MFA 和恢复路径验证。
+- 浏览器真实登录、免邮件验证注册、找回、退出；管理员 OIDC、MFA 和恢复路径验证。
 - 发布两个审核应用；无授权时接口拒绝；申请多角色、批准/拒绝、意见回显、导航刷新、实际应用访问和撤权拒绝全部重跑。
 - 验证应用 SSR/RSC、Server Actions、资源、主题、中英文和移动端。应用后端需部署真实 SDK 应用并验证签名，不能用健康检查代替业务验收。
 - 删除**测试环境**的一个无状态 Pod 后会话仍可用；重建 PostgreSQL Pod 后数据仍在。迁移重复执行无破坏。
